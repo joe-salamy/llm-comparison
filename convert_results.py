@@ -5,6 +5,10 @@ import csv
 import re
 from pathlib import Path
 
+DEFAULT_INPUT = Path("data/input.txt")
+DEFAULT_MARKDOWN = Path("data/results.md")
+DEFAULT_CSV = Path("data/results.csv")
+
 DISPLAY_HEADERS = [
     "Model",
     "Context Window",
@@ -211,11 +215,13 @@ def write_csv(rows: list[list[str]], path: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Convert copied Artificial Analysis leaderboard data into Markdown and CSV."
+        description=(
+            "Convert copied Artificial Analysis leaderboard data into Markdown and CSV."
+        )
     )
-    parser.add_argument("--input", default="input.txt", type=Path)
-    parser.add_argument("--markdown", default="results.md", type=Path)
-    parser.add_argument("--csv", default="results.csv", type=Path)
+    parser.add_argument("--input", default=DEFAULT_INPUT, type=Path)
+    parser.add_argument("--markdown", default=DEFAULT_MARKDOWN, type=Path)
+    parser.add_argument("--csv", default=DEFAULT_CSV, type=Path)
     args = parser.parse_args()
 
     rows = parse_input(args.input)

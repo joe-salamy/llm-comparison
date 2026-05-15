@@ -2,9 +2,23 @@
 
 Tools for converting and comparing Artificial Analysis LLM data.
 
+## Installation
+
+This project uses only the Python standard library at runtime. Python 3.11 or
+newer is required.
+
+For development checks, install the optional tools:
+
+```powershell
+python -m pip install -e ".[dev]"
+```
+
 ## Data
 
 The comparison script uses `data/results.csv` as its source of truth. Generated reports are written to the repository root.
+
+Raw copied source text lives in `data/input.txt`. Converted Markdown and CSV
+outputs live in `data/results.md` and `data/results.csv`.
 
 ## Compare Models
 
@@ -48,5 +62,25 @@ Use `convert_results.py` to convert copied Artificial Analysis source text into 
 1. Go to https://artificialanalysis.ai/leaderboards/models
 2. Expand all columns
 3. Copy from "Features" through last "Model, Providers"
-4. Paste into input.txt
+4. Paste into `data/input.txt`
 5. Run `python convert_results.py`
+
+By default, the converter writes `data/results.md` and `data/results.csv`.
+
+## Development
+
+Run the validation checks before publishing changes:
+
+```powershell
+python -m ruff check .
+python -m mypy compare_models.py compare_models_core.py convert_results.py tests
+python -m pytest
+```
+
+`compare_models.py` is the CLI entry point. Ranking and data-shaping logic lives
+in `compare_models_core.py`; the generated report template lives in
+`compare_models_template.py`.
+
+## License
+
+MIT. See `LICENSE`.
