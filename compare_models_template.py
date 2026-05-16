@@ -328,7 +328,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
     .zoom-indicator {
       position: absolute;
-      top: 126px;
+      top: 140px;
       right: 12px;
       z-index: 3;
       min-width: 58px;

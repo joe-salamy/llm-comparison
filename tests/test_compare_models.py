@@ -151,7 +151,7 @@ def test_3d_default_camera_starts_slightly_zoomed_in(tmp_path: Path) -> None:
 
     html = output.read_text(encoding="utf-8")
     expected_camera = (
-        "const initialCamera = { rotationX: 0.62, rotationY: 0.78, zoom: 1.18 }"
+        "const initialCamera = { rotationX: 0.62, rotationY: 0.78, zoom: 1.25 }"
     )
     assert expected_camera in html
 
@@ -179,6 +179,7 @@ def test_3d_zoom_indicator_is_rendered_and_updated(tmp_path: Path) -> None:
 
     html = output.read_text(encoding="utf-8")
     assert 'id="zoomIndicator"' in html
+    assert "top: 140px;" in html
     assert "function updateZoomIndicator()" in html
     assert 'zoomIndicator.textContent = `${zoom.toFixed(2)}x`' in html
 
