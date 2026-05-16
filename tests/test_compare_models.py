@@ -210,3 +210,32 @@ def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:
     assert "function orderedValidMetricKeys(keys)" in html
     assert 'url.searchParams.set("metrics", selectedCategories.join(","))' in html
     assert "applySelection({ syncUrl: true })" in html
+
+
+def test_context_window_is_not_a_core_metric(tmp_path: Path) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "one",
+            "context_window_tokens": "128000",
+            "quality": "1",
+            "_raw_values": {"context_window_tokens": 128000.0, "quality": 1.0},
+            FINAL_SCORE: 100.0,
+        }
+    ]
+
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality"],
+        [{"optimal": True, "suboptimal": False}],
+        ["context_window_tokens", "quality"],
+    )
+
+    html = output.read_text(encoding="utf-8")
+    core_keys_start = html.index("const coreCategoryKeys = [")
+    core_keys_end = html.index("];", core_keys_start)
+    core_keys = html[core_keys_start:core_keys_end]
+
+    assert '"context_window_tokens"' not in core_keys

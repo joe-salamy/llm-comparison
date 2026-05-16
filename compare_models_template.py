@@ -617,7 +617,6 @@ HTML_TEMPLATE = r"""<!doctype html>
     ];
     const lowerIsBetterMarkers = ["price", "usd", "latency", "time"];
     const coreCategoryKeys = [
-      "context_window_tokens",
       "artificial_analysis_intelligence_index",
       "blended_usd_per_1m_tokens",
       "median_tokens_per_second",
