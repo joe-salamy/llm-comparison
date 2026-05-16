@@ -83,3 +83,46 @@ def test_chart_type_uses_active_scoring_categories(tmp_path: Path) -> None:
         'payload.graphCategories.length === 2 ? "2D category comparison"'
     )
     assert stale_chart_branch not in html
+
+
+def test_3d_trend_renders_as_line_not_plane(tmp_path: Path) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "one",
+            "quality": "1",
+            "cost": "3",
+            "speed": "2",
+            "_raw_values": {"quality": 1.0, "cost": 3.0, "speed": 2.0},
+            FINAL_SCORE: 10.0,
+        },
+        {
+            "model": "two",
+            "quality": "2",
+            "cost": "2",
+            "speed": "3",
+            "_raw_values": {"quality": 2.0, "cost": 2.0, "speed": 3.0},
+            FINAL_SCORE: 20.0,
+        },
+        {
+            "model": "three",
+            "quality": "3",
+            "cost": "1",
+            "speed": "4",
+            "_raw_values": {"quality": 3.0, "cost": 1.0, "speed": 4.0},
+            FINAL_SCORE: 30.0,
+        },
+    ]
+
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality", "cost", "speed"],
+        [{"optimal": False, "suboptimal": False}] * 3,
+    )
+
+    html = output.read_text(encoding="utf-8")
+    assert "function fit3DTrendLine(" in html
+    assert "function drawTrendLine(" in html
+    assert "function drawTrendPlane(" not in html
