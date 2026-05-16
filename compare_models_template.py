@@ -591,6 +591,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     let minScore = 0;
     let maxScore = 100;
     let medianScore = 50;
+    let chartDisposers = [];
 
     function isLowerBetter(key) {
       return lowerIsBetterMarkers.some(marker => key.includes(marker));
@@ -823,10 +824,17 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
 
     function resetChartCanvas() {
+      for (const dispose of chartDisposers) dispose();
+      chartDisposers = [];
       const canvas = document.getElementById("chart");
       const replacement = canvas.cloneNode(false);
       canvas.replaceWith(replacement);
       document.getElementById("tooltip").style.display = "none";
+    }
+
+    function trackChartListener(target, type, handler, options) {
+      target.addEventListener(type, handler, options);
+      chartDisposers.push(() => target.removeEventListener(type, handler, options));
     }
 
     function applySelection() {
@@ -1311,23 +1319,27 @@ HTML_TEMPLATE = r"""<!doctype html>
       return { intercept, xSlope, ySlope };
     }
 
+    function chartCategories() {
+      return [2, 3].includes(payload.categories.length) ? payload.categories : [];
+    }
+
     function drawGraph() {
       const chartSection = document.getElementById("chartSection");
-      if (![2, 3].includes(payload.graphCategories.length)) {
+      const categories = chartCategories();
+      if (!categories.length) {
         chartSection.hidden = true;
         return;
       }
       chartSection.hidden = false;
       document.getElementById("chartTitle").textContent =
-        payload.graphCategories.length === 2 ? "2D category comparison" : "3D category comparison";
-      document.getElementById("resetCamera").hidden = payload.graphCategories.length !== 3;
-      document.getElementById("viewCube").hidden = payload.graphCategories.length !== 3;
-      if (payload.graphCategories.length === 2) draw2D();
-      else draw3D();
+        categories.length === 2 ? "2D category comparison" : "3D category comparison";
+      document.getElementById("resetCamera").hidden = categories.length !== 3;
+      document.getElementById("viewCube").hidden = categories.length !== 3;
+      if (categories.length === 2) draw2D(categories);
+      else draw3D(categories);
     }
 
-    function draw2D() {
-      const categories = payload.categories.slice(0, 2);
+    function draw2D(categories) {
       const ranges = categories.map(metricRange);
       const trend = fit2DTrend(payload.rows, categories, ranges);
       let hover = null;
@@ -1486,7 +1498,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       }
 
       const canvas = document.getElementById("chart");
-      canvas.addEventListener("mousemove", event => {
+      trackChartListener(canvas, "mousemove", event => {
         const rect = canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
@@ -1506,18 +1518,17 @@ HTML_TEMPLATE = r"""<!doctype html>
         }
         render();
       });
-      canvas.addEventListener("mouseleave", () => {
+      trackChartListener(canvas, "mouseleave", () => {
         hover = null;
         canvas.style.cursor = "";
         tooltip.style.display = "none";
         render();
       });
-      window.addEventListener("resize", render);
+      trackChartListener(window, "resize", render);
       render();
     }
 
-    function draw3D() {
-      const categories = payload.categories.slice(0, 3);
+    function draw3D(categories) {
       const ranges = categories.map(metricRange);
       const trend = fit3DTrend(payload.rows, categories, ranges);
       const tooltip = document.getElementById("tooltip");
@@ -1791,15 +1802,15 @@ HTML_TEMPLATE = r"""<!doctype html>
       }
 
       const canvas = document.getElementById("chart");
-      canvas.addEventListener("mousedown", event => {
+      trackChartListener(canvas, "mousedown", event => {
         dragging = true;
         last = { x: event.clientX, y: event.clientY };
       });
-      window.addEventListener("mouseup", () => {
+      trackChartListener(window, "mouseup", () => {
         dragging = false;
         canvas.style.cursor = hover ? "pointer" : "";
       });
-      window.addEventListener("mousemove", event => {
+      trackChartListener(window, "mousemove", event => {
         if (dragging) {
           rotationY -= (event.clientX - last.x) * 0.01;
           rotationX += (event.clientY - last.y) * 0.01;
@@ -1842,28 +1853,28 @@ HTML_TEMPLATE = r"""<!doctype html>
         }
         render();
       });
-      canvas.addEventListener("mouseleave", () => {
+      trackChartListener(canvas, "mouseleave", () => {
         hover = null;
         canvas.style.cursor = "";
         tooltip.style.display = "none";
         render();
       });
-      canvas.addEventListener("wheel", event => {
+      trackChartListener(canvas, "wheel", event => {
         event.preventDefault();
         zoom *= event.deltaY < 0 ? 1.08 : 0.92;
         zoom = Math.max(0.55, Math.min(8, zoom));
         render();
       }, { passive: false });
-      document.getElementById("resetCamera").addEventListener("click", () => {
+      trackChartListener(document.getElementById("resetCamera"), "click", () => {
         setCamera(initialCamera);
       });
-      viewCube.addEventListener("click", event => {
+      trackChartListener(viewCube, "click", event => {
         const button = event.target.closest?.("button[data-view]");
         if (!button) return;
         const preset = viewPresets[button.dataset.view];
         if (preset) setCamera(preset, { preserveZoom: true });
       });
-      window.addEventListener("resize", render);
+      trackChartListener(window, "resize", render);
       render();
     }
 
