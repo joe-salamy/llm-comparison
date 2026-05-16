@@ -1252,69 +1252,51 @@
       return { slope, intercept };
     }
 
-    function solve3By3(matrix, vector) {
-      const augmented = matrix.map((row, index) => [...row, vector[index]]);
-      for (let pivot = 0; pivot < 3; pivot += 1) {
-        let bestRow = pivot;
-        for (let row = pivot + 1; row < 3; row += 1) {
-          if (Math.abs(augmented[row][pivot]) > Math.abs(augmented[bestRow][pivot])) {
-            bestRow = row;
-          }
-        }
-        if (Math.abs(augmented[bestRow][pivot]) < 0.000001) return null;
-        [augmented[pivot], augmented[bestRow]] = [augmented[bestRow], augmented[pivot]];
-
-        const pivotValue = augmented[pivot][pivot];
-        for (let column = pivot; column < 4; column += 1) {
-          augmented[pivot][column] /= pivotValue;
-        }
-        for (let row = 0; row < 3; row += 1) {
-          if (row === pivot) continue;
-          const factor = augmented[row][pivot];
-          for (let column = pivot; column < 4; column += 1) {
-            augmented[row][column] -= factor * augmented[pivot][column];
-          }
-        }
-      }
-      return augmented.map(row => row[3]);
-    }
-
-    function fit3DTrend(rows, categories, ranges) {
+    function fit3DTrendLine(rows, categories, ranges) {
       if (rows.length < 3) return null;
-      let sumX = 0;
-      let sumY = 0;
-      let sumZ = 0;
-      let sumXX = 0;
-      let sumYY = 0;
-      let sumXY = 0;
-      let sumXZ = 0;
-      let sumYZ = 0;
+      const points = rows.map(row => ({
+        x: normalizedMetric(row, categories[0], ranges[0]) * 2 - 1,
+        y: normalizedMetric(row, categories[1], ranges[1]) * 2 - 1,
+        z: normalizedMetric(row, categories[2], ranges[2]) * 2 - 1,
+      }));
+      const center = points.reduce((sum, point) => ({
+        x: sum.x + point.x / points.length,
+        y: sum.y + point.y / points.length,
+        z: sum.z + point.z / points.length,
+      }), { x: 0, y: 0, z: 0 });
 
-      for (const row of rows) {
-        const x = normalizedMetric(row, categories[0], ranges[0]) * 2 - 1;
-        const y = normalizedMetric(row, categories[1], ranges[1]) * 2 - 1;
-        const z = normalizedMetric(row, categories[2], ranges[2]) * 2 - 1;
-        sumX += x;
-        sumY += y;
-        sumZ += z;
-        sumXX += x * x;
-        sumYY += y * y;
-        sumXY += x * y;
-        sumXZ += x * z;
-        sumYZ += y * z;
+      const covariance = [
+        [0, 0, 0],
+        [0, 0, 0],
+        [0, 0, 0],
+      ];
+      for (const point of points) {
+        const dx = point.x - center.x;
+        const dy = point.y - center.y;
+        const dz = point.z - center.z;
+        covariance[0][0] += dx * dx;
+        covariance[0][1] += dx * dy;
+        covariance[0][2] += dx * dz;
+        covariance[1][0] += dy * dx;
+        covariance[1][1] += dy * dy;
+        covariance[1][2] += dy * dz;
+        covariance[2][0] += dz * dx;
+        covariance[2][1] += dz * dy;
+        covariance[2][2] += dz * dz;
       }
 
-      const coefficients = solve3By3(
-        [
-          [rows.length, sumX, sumY],
-          [sumX, sumXX, sumXY],
-          [sumY, sumXY, sumYY],
-        ],
-        [sumZ, sumXZ, sumYZ],
-      );
-      if (!coefficients) return null;
-      const [intercept, xSlope, ySlope] = coefficients;
-      return { intercept, xSlope, ySlope };
+      let direction = { x: 1, y: 1, z: 1 };
+      for (let iteration = 0; iteration < 24; iteration += 1) {
+        const next = {
+          x: covariance[0][0] * direction.x + covariance[0][1] * direction.y + covariance[0][2] * direction.z,
+          y: covariance[1][0] * direction.x + covariance[1][1] * direction.y + covariance[1][2] * direction.z,
+          z: covariance[2][0] * direction.x + covariance[2][1] * direction.y + covariance[2][2] * direction.z,
+        };
+        const length = Math.hypot(next.x, next.y, next.z);
+        if (length < 0.000001) return null;
+        direction = { x: next.x / length, y: next.y / length, z: next.z / length };
+      }
+      return { center, direction };
     }
 
     function chartCategories() {
@@ -1528,7 +1510,7 @@
 
     function draw3D(categories) {
       const ranges = categories.map(metricRange);
-      const trend = fit3DTrend(payload.rows, categories, ranges);
+      const trend = fit3DTrendLine(payload.rows, categories, ranges);
       const tooltip = document.getElementById("tooltip");
       const initialCamera = { rotationX: 0.62, rotationY: 0.78, zoom: 1 };
       const viewPresets = {
@@ -1622,54 +1604,46 @@
         return point;
       }
 
-      function trendZ(x, y) {
-        return trend.intercept + trend.xSlope * x + trend.ySlope * y;
+      function clippedTrendEndpoints() {
+        if (!trend) return;
+        let minT = -Infinity;
+        let maxT = Infinity;
+        for (const axis of ["x", "y", "z"]) {
+          const centerValue = trend.center[axis];
+          const directionValue = trend.direction[axis];
+          if (Math.abs(directionValue) < 0.000001) {
+            if (centerValue < -1 || centerValue > 1) return null;
+            continue;
+          }
+          const first = (-1 - centerValue) / directionValue;
+          const second = (1 - centerValue) / directionValue;
+          minT = Math.max(minT, Math.min(first, second));
+          maxT = Math.min(maxT, Math.max(first, second));
+        }
+        if (minT > maxT) return null;
+        return {
+          start: {
+            x: trend.center.x + trend.direction.x * minT,
+            y: trend.center.y + trend.direction.y * minT,
+            z: trend.center.z + trend.direction.z * minT,
+          },
+          end: {
+            x: trend.center.x + trend.direction.x * maxT,
+            y: trend.center.y + trend.direction.y * maxT,
+            z: trend.center.z + trend.direction.z * maxT,
+          },
+        };
       }
 
-      function drawTrendPlane(ctx, width, height) {
-        if (!trend) return;
-        const gridCount = 8;
-        const sampleCount = 28;
-        const min = -1;
-        const max = 1;
-
+      function drawTrendLine(ctx, width, height) {
+        const endpoints = clippedTrendEndpoints();
+        if (!endpoints) return;
         ctx.save();
         ctx.strokeStyle = "#8a5a00";
-        ctx.lineWidth = 2.25;
-        ctx.globalAlpha = 0.72;
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.82;
         ctx.setLineDash([8, 5]);
-
-        function drawTrendPolyline(points) {
-          let drawing = false;
-          for (const point of points) {
-            if (point.z < -1.12 || point.z > 1.12) {
-              drawing = false;
-              continue;
-            }
-            const projected = projectPoint(point, width, height);
-            if (!drawing) {
-              ctx.beginPath();
-              ctx.moveTo(projected.x, projected.y);
-              drawing = true;
-            } else {
-              ctx.lineTo(projected.x, projected.y);
-            }
-          }
-          if (drawing) ctx.stroke();
-        }
-
-        for (let gridIndex = 0; gridIndex <= gridCount; gridIndex += 1) {
-          const fixed = min + (gridIndex / gridCount) * (max - min);
-          const xLine = [];
-          const yLine = [];
-          for (let sampleIndex = 0; sampleIndex <= sampleCount; sampleIndex += 1) {
-            const moving = min + (sampleIndex / sampleCount) * (max - min);
-            xLine.push({ x: fixed, y: moving, z: trendZ(fixed, moving) });
-            yLine.push({ x: moving, y: fixed, z: trendZ(moving, fixed) });
-          }
-          drawTrendPolyline(xLine);
-          drawTrendPolyline(yLine);
-        }
+        drawSegment(ctx, endpoints.start, endpoints.end, width, height);
         ctx.restore();
       }
 
@@ -1752,7 +1726,7 @@
           ctx.fillStyle = "#2f3831";
         }
 
-        drawTrendPlane(ctx, width, height);
+        drawTrendLine(ctx, width, height);
 
         const projected = payload.rows.map(row => {
           const point = {
