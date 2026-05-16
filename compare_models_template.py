@@ -1064,11 +1064,11 @@ HTML_TEMPLATE = r"""<!doctype html>
       const min = Math.min(...values);
       const max = Math.max(...values);
       const rawSpan = Math.max(0.0001, max - min);
-      const paddedMin = min - rawSpan * 0.1;
+      const paddedMin = Math.max(0, min - rawSpan * 0.1);
       const paddedMax = max + rawSpan * 0.1;
       const tickStep = niceNumber((paddedMax - paddedMin) / 5, true);
-      const rangeMin = Math.floor(paddedMin / tickStep) * tickStep;
-      const rangeMax = Math.ceil(paddedMax / tickStep) * tickStep;
+      const rangeMin = Math.max(0, Math.floor(paddedMin / tickStep) * tickStep);
+      const rangeMax = Math.max(tickStep, Math.ceil(paddedMax / tickStep) * tickStep);
       return { min: rangeMin, max: rangeMax, span: Math.max(0.0001, rangeMax - rangeMin) };
     }
 
@@ -1332,6 +1332,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       const trend = fit2DTrend(payload.rows, categories, ranges);
       let hover = null;
       const tooltip = document.getElementById("tooltip");
+      const hoverRadius = 18;
 
       function project(row, width, height) {
         const margins = { top: 54, right: 58, bottom: 74, left: 92 };
@@ -1451,6 +1452,15 @@ HTML_TEMPLATE = r"""<!doctype html>
           ctx.arc(point.x, point.y, point.row.pareto.optimal ? 5.5 : 4, 0, Math.PI * 2);
           ctx.fill();
         }
+        if (hover) {
+          ctx.save();
+          ctx.strokeStyle = "#1c1f1d";
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(hover.x, hover.y, hover.row.pareto.optimal ? 8.5 : 7, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
         for (const point of projected) {
           if (point.row.pareto.optimal || point.row.pareto.suboptimal) {
             ctx.fillStyle = point.row.pareto.suboptimal ? "#7a1717" : "#12351f";
@@ -1484,7 +1494,8 @@ HTML_TEMPLATE = r"""<!doctype html>
           const distance = Math.hypot(point.x - x, point.y - y);
           return distance < best.distance ? { point, distance } : best;
         }, { point: null, distance: Infinity });
-        hover = nearest.distance < 12 ? nearest.point : null;
+        hover = nearest.distance < hoverRadius ? nearest.point : null;
+        canvas.style.cursor = hover ? "pointer" : "";
         if (hover) {
           tooltip.style.display = "block";
           tooltip.style.left = `${event.clientX}px`;
@@ -1493,10 +1504,13 @@ HTML_TEMPLATE = r"""<!doctype html>
         } else {
           tooltip.style.display = "none";
         }
+        render();
       });
       canvas.addEventListener("mouseleave", () => {
         hover = null;
+        canvas.style.cursor = "";
         tooltip.style.display = "none";
+        render();
       });
       window.addEventListener("resize", render);
       render();
@@ -1521,7 +1535,9 @@ HTML_TEMPLATE = r"""<!doctype html>
       let rotationY = initialCamera.rotationY;
       let zoom = initialCamera.zoom;
       let dragging = false;
+      let hover = null;
       let last = { x: 0, y: 0 };
+      const hoverRadius = 18;
       const viewCube = document.getElementById("viewCube");
 
       function norm(row, category, range) {
@@ -1747,6 +1763,15 @@ HTML_TEMPLATE = r"""<!doctype html>
           ctx.fill();
           ctx.globalAlpha = 1;
         }
+        if (hover) {
+          ctx.save();
+          ctx.strokeStyle = "#1c1f1d";
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(hover.x, hover.y, hover.row.pareto.optimal ? 9 : 7.5, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
         const occupiedLabels = [];
         for (const point of projected) {
           if (!point.row.pareto.optimal && !point.row.pareto.suboptimal) continue;
@@ -1770,34 +1795,58 @@ HTML_TEMPLATE = r"""<!doctype html>
         dragging = true;
         last = { x: event.clientX, y: event.clientY };
       });
-      window.addEventListener("mouseup", () => dragging = false);
+      window.addEventListener("mouseup", () => {
+        dragging = false;
+        canvas.style.cursor = hover ? "pointer" : "";
+      });
       window.addEventListener("mousemove", event => {
         if (dragging) {
           rotationY -= (event.clientX - last.x) * 0.01;
           rotationX += (event.clientY - last.y) * 0.01;
           rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotationX));
           last = { x: event.clientX, y: event.clientY };
+          hover = null;
+          tooltip.style.display = "none";
+          canvas.style.cursor = "grabbing";
           render();
           return;
         }
         const rect = canvas.getBoundingClientRect();
+        const inCanvas =
+          event.clientX >= rect.left &&
+          event.clientX <= rect.right &&
+          event.clientY >= rect.top &&
+          event.clientY <= rect.bottom;
+        if (!inCanvas) {
+          hover = null;
+          canvas.style.cursor = "";
+          tooltip.style.display = "none";
+          render();
+          return;
+        }
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
         const nearest = (canvas._points || []).reduce((best, point) => {
           const distance = Math.hypot(point.x - x, point.y - y);
           return distance < best.distance ? { point, distance } : best;
         }, { point: null, distance: Infinity });
-        if (nearest.distance < 13) {
+        hover = nearest.distance < hoverRadius ? nearest.point : null;
+        canvas.style.cursor = hover ? "pointer" : "";
+        if (hover) {
           tooltip.style.display = "block";
           tooltip.style.left = `${event.clientX}px`;
           tooltip.style.top = `${event.clientY}px`;
-          tooltip.innerHTML = tooltipText(nearest.point.row, categories);
+          tooltip.innerHTML = tooltipText(hover.row, categories);
         } else {
           tooltip.style.display = "none";
         }
+        render();
       });
       canvas.addEventListener("mouseleave", () => {
+        hover = null;
+        canvas.style.cursor = "";
         tooltip.style.display = "none";
+        render();
       });
       canvas.addEventListener("wheel", event => {
         event.preventDefault();
