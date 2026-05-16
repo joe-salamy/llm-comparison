@@ -1,6 +1,6 @@
 ---
 name: github-pages-publisher
-description: Publish this llm-comparison repo to GitHub Pages by refreshing the gh-pages branch with only the public static-site subset: index.html, results.csv, compare_models.py, compare_models_core.py, compare_models_template.py, README.md, and .gitignore.
+description: "Publish this llm-comparison repo to GitHub Pages by refreshing the gh-pages branch with only the public static-site subset."
 ---
 
 # GitHub Pages Publisher
