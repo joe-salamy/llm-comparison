@@ -1595,7 +1595,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       const ranges = categories.map(metricRange);
       const trend = fit3DTrendLine(payload.rows, categories, ranges);
       const tooltip = document.getElementById("tooltip");
-      const initialCamera = { rotationX: 0.62, rotationY: 0.78, zoom: 1 };
+      const initialCamera = { rotationX: 0.62, rotationY: 0.78, zoom: 1.18 };
       const viewPresets = {
         front: { rotationX: 0, rotationY: 0, zoom: 1.1 },
         back: { rotationX: 0, rotationY: Math.PI, zoom: 1.1 },
