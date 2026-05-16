@@ -69,7 +69,15 @@ def main() -> None:
     scored_rows = score_rows(rows, categories)
     pareto = pareto_flags(scored_rows, categories) if len(categories) in {2, 3} else []
     columns = table_columns(headers, numeric | {FINAL_SCORE}, args.all_columns)
-    write_html(args.output, scored_rows, columns, categories, pareto)
+    available_categories = [header for header in headers if header in numeric]
+    write_html(
+        args.output,
+        scored_rows,
+        columns,
+        categories,
+        pareto,
+        available_categories,
+    )
 
     print(f"Wrote {len(scored_rows)} ranked rows to {args.output}")
 

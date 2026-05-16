@@ -48,6 +48,207 @@ HTML_TEMPLATE = r"""<!doctype html>
       color: var(--muted);
       font-size: 13px;
     }
+    .meta-stack {
+      display: grid;
+      gap: 4px;
+    }
+    .controls-wrap,
+    .info-wrap {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      padding: 14px;
+    }
+    .controls-header,
+    .info-title {
+      margin: 0 0 10px;
+      color: #242824;
+      font-size: 15px;
+      font-weight: 720;
+    }
+    .metric-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .metric-groups {
+      display: grid;
+      grid-template-columns: minmax(280px, 0.78fr) minmax(320px, 1.22fr);
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .metric-group {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfa;
+      padding: 11px;
+    }
+    .metric-group.core {
+      border-color: #9ab7a6;
+      background: #f3faf5;
+    }
+    .metric-group-title {
+      margin: 0 0 8px;
+      color: #303630;
+      font-size: 12px;
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+    .metric-group.core .metric-group-title {
+      color: #1e5637;
+    }
+    .metric-button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #f7f8f5;
+      color: #242824;
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 650;
+      padding: 7px 9px;
+    }
+    .metric-button:hover,
+    .metric-button:focus-visible {
+      background: #eef0ec;
+      outline: none;
+    }
+    .metric-button[disabled] {
+      cursor: default;
+      opacity: 0.45;
+    }
+    .metric-group.core .metric-button {
+      border-color: #9ab7a6;
+      background: #ffffff;
+      font-size: 13px;
+      padding: 8px 10px;
+    }
+    .metric-group.core .metric-button:hover,
+    .metric-group.core .metric-button:focus-visible {
+      background: #e8f3ec;
+    }
+    .selected-line {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: start;
+    }
+    .selected-metrics {
+      min-height: 42px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 7px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfa;
+    }
+    .selected-empty {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 3px 2px;
+    }
+    .metric-card {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      max-width: 100%;
+      border: 1px solid #b8c1b8;
+      border-radius: 6px;
+      background: #ffffff;
+      color: #242824;
+      font-size: 12px;
+      font-weight: 650;
+      padding: 5px 7px;
+    }
+    .metric-order {
+      color: var(--muted);
+      font-weight: 720;
+    }
+    .remove-metric {
+      width: 18px;
+      height: 18px;
+      display: inline-grid;
+      place-items: center;
+      border: 0;
+      border-radius: 4px;
+      background: #eef0ec;
+      color: #242824;
+      cursor: pointer;
+      font: inherit;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0;
+    }
+    .run-button {
+      min-height: 42px;
+      border: 1px solid #1e5637;
+      border-radius: 6px;
+      background: #1e5637;
+      color: #ffffff;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 720;
+      padding: 0 14px;
+      white-space: nowrap;
+    }
+    .selection-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .clear-button {
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #f7f8f5;
+      color: #303630;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 720;
+      padding: 0 12px;
+      white-space: nowrap;
+    }
+    .run-button:hover,
+    .run-button:focus-visible {
+      background: #17472d;
+      outline: none;
+    }
+    .clear-button:hover,
+    .clear-button:focus-visible {
+      background: #eef0ec;
+      outline: none;
+    }
+    .control-note {
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .info-wrap {
+      color: #303630;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .info-wrap p,
+    .info-wrap ul {
+      margin: 0;
+    }
+    .info-wrap ul {
+      padding-left: 18px;
+    }
+    .info-wrap li + li {
+      margin-top: 4px;
+    }
+    .info-wrap a {
+      color: #1f5d8f;
+      font-weight: 650;
+    }
     .chart-wrap {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -231,6 +432,12 @@ HTML_TEMPLATE = r"""<!doctype html>
       main { width: min(100vw - 18px, 1500px); padding-top: 14px; }
       header { display: block; }
       h1 { font-size: 20px; }
+      .selected-line,
+      .metric-groups,
+      .info-grid { grid-template-columns: 1fr; }
+      .selection-actions { display: grid; grid-template-columns: 1fr 1fr; }
+      .run-button,
+      .clear-button { width: 100%; }
       #chart { height: 440px; }
       th, td { padding: 8px; }
     }
@@ -241,9 +448,33 @@ HTML_TEMPLATE = r"""<!doctype html>
     <header>
       <div>
         <h1>LLM Comparison</h1>
-        <div class="meta" id="summary"></div>
+        <div class="meta-stack">
+          <div class="meta">Data updated: May 15, 2026</div>
+          <div class="meta" id="summary"></div>
+        </div>
       </div>
     </header>
+    <section class="controls-wrap" aria-labelledby="controlsTitle">
+      <h2 class="controls-header" id="controlsTitle">Choose scoring metrics</h2>
+      <div class="metric-groups">
+        <div class="metric-group core">
+          <div class="metric-group-title">Core metrics</div>
+          <div class="metric-picker" id="coreMetricPicker"></div>
+        </div>
+        <div class="metric-group">
+          <div class="metric-group-title">Additional metrics</div>
+          <div class="metric-picker" id="otherMetricPicker"></div>
+        </div>
+      </div>
+      <div class="selected-line">
+        <div class="selected-metrics" id="selectedMetrics" aria-live="polite"></div>
+        <div class="selection-actions">
+          <button class="clear-button" id="clearMetrics" type="button">Clear all</button>
+          <button class="run-button" id="runComparison" type="button">Run comparison</button>
+        </div>
+      </div>
+      <div class="control-note" id="controlNote"></div>
+    </section>
     <section class="chart-wrap" id="chartSection" hidden>
       <div class="chart-title">
         <div id="chartTitle"></div>
@@ -275,22 +506,441 @@ HTML_TEMPLATE = r"""<!doctype html>
     <div class="table-wrap">
       <table id="resultsTable"></table>
     </div>
+    <section class="info-wrap" aria-labelledby="aboutTitle">
+      <h2 class="info-title" id="aboutTitle">About this comparison</h2>
+      <div class="info-grid">
+        <p>This static report ranks LLMs from the included <code>results.csv</code> data file. The source data was copied from Artificial Analysis, converted locally, and published here so viewers can change comparisons without collecting the data themselves.</p>
+        <ul>
+          <li>Higher is better for quality, benchmark, context, and speed metrics.</li>
+          <li>Lower is better for price, latency, and time metrics.</li>
+          <li>The final score is the average of direction-adjusted percentile ranks across the selected metrics.</li>
+          <li>Models missing any selected numeric metric are excluded from that run.</li>
+        </ul>
+        <p>Credit: model benchmark, pricing, and performance data is from <a href="https://artificialanalysis.ai/leaderboards/models" rel="noreferrer">Artificial Analysis</a>. This project is an independent analysis and is not affiliated with Artificial Analysis.</p>
+      </div>
+    </section>
   </main>
   <div class="tooltip" id="tooltip"></div>
   <script>
     const payload = __PAYLOAD__;
+    const dataUpdated = "May 15, 2026";
+    const displayLabels = {
+      model: "Model",
+      context_window_tokens: "Context Window",
+      creator: "Creator",
+      providers: "Providers",
+      license: "License",
+      artificial_analysis_intelligence_index: "Artificial Analysis Intelligence Index",
+      artificial_analysis_omniscience_index: "Artificial Analysis Omniscience Index",
+      gdpval_aa_pct: "GDPval-AA",
+      terminal_bench_hard_pct: "Terminal-Bench Hard",
+      tau2_bench_telecom_pct: "Tau2-Bench Telecom",
+      aa_lcr_pct: "AA-LCR",
+      aa_omniscience_accuracy_pct: "AA-Omniscience Accuracy",
+      aa_omniscience_non_hallucination_rate_pct: "AA-Omniscience Non-Hallucination Rate",
+      humanitys_last_exam_pct: "Humanity's Last Exam",
+      gpqa_diamond_pct: "GPQA Diamond",
+      scicode_pct: "SciCode",
+      ifbench_pct: "IFBench",
+      critpt_pct: "CritPt",
+      apex_agents_aa_pct: "APEX-Agents-AA",
+      mmmu_pro_pct: "MMMU Pro",
+      blended_usd_per_1m_tokens: "Blended (USD/1M Tokens)",
+      input_price_usd_per_1m_tokens: "Input Price (USD/1M Tokens)",
+      output_price_usd_per_1m_tokens: "Output Price (USD/1M Tokens)",
+      median_tokens_per_second: "Median (Tokens/s)",
+      p5_tokens_per_second: "P5 (Tokens/s)",
+      p25_tokens_per_second: "P25 (Tokens/s)",
+      p75_tokens_per_second: "P75 (Tokens/s)",
+      p95_tokens_per_second: "P95 (Tokens/s)",
+      first_chunk_latency_seconds: "First Chunk Latency (s)",
+      first_answer_latency_seconds: "First Answer Latency (s)",
+      p5_first_chunk_latency_seconds: "P5 First Chunk Latency (s)",
+      p25_first_chunk_latency_seconds: "P25 First Chunk Latency (s)",
+      p75_first_chunk_latency_seconds: "P75 First Chunk Latency (s)",
+      p95_first_chunk_latency_seconds: "P95 First Chunk Latency (s)",
+      total_response_time_seconds: "Total Response Time (s)",
+      reasoning_time_seconds: "Reasoning Time (s)",
+    };
+    const mainColumnKeys = [
+      "model",
+      "context_window_tokens",
+      "creator",
+      "artificial_analysis_intelligence_index",
+      "blended_usd_per_1m_tokens",
+      "median_tokens_per_second",
+      "first_chunk_latency_seconds",
+      "total_response_time_seconds",
+      "final_score",
+    ];
+    const lowerIsBetterMarkers = ["price", "usd", "latency", "time"];
+    const coreCategoryKeys = [
+      "context_window_tokens",
+      "artificial_analysis_intelligence_index",
+      "blended_usd_per_1m_tokens",
+      "median_tokens_per_second",
+      "first_chunk_latency_seconds",
+      "total_response_time_seconds",
+    ];
+    const embeddedRows = payload.rows.slice();
+    let sourceRows = [];
+    let availableCategories = (payload.availableCategories || payload.categories).slice();
+    let selectedCategories = payload.categories.map(category => category.key);
     let rows = payload.rows.slice();
     let sortState = { key: "final_score", direction: "desc" };
+    let minScore = 0;
+    let maxScore = 100;
+    let medianScore = 50;
 
-    const scoreValues = rows.map(row => row.score).sort((a, b) => a - b);
-    const minScore = scoreValues[0] ?? 0;
-    const maxScore = scoreValues[scoreValues.length - 1] ?? 100;
-    const medianScore = scoreValues.length
-      ? scoreValues[Math.floor((scoreValues.length - 1) / 2)]
-      : 50;
+    function isLowerBetter(key) {
+      return lowerIsBetterMarkers.some(marker => key.includes(marker));
+    }
 
-    document.getElementById("summary").textContent =
-      `${rows.length} models ranked by ${payload.categories.map(c => c.label).join(", ")}`;
+    function labelFor(key) {
+      return displayLabels[key] || key.replaceAll("_", " ");
+    }
+
+    function parseNumber(value) {
+      if (value === null || value === undefined) return null;
+      const text = String(value).trim();
+      if (!text) return null;
+      const parsed = Number(text.replaceAll(",", ""));
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function formatValue(key, value) {
+      if (key === "final_score") return Number(value).toFixed(2);
+      const parsed = parseNumber(value);
+      if (parsed === null) return value ?? "";
+      const general = () => Number.isInteger(parsed) ? String(parsed) : String(parsed);
+      if (key === "context_window_tokens") return Math.round(parsed).toLocaleString();
+      if (key.endsWith("_pct") || key.endsWith("_index")) return general();
+      if (key.includes("usd") || key.includes("seconds")) return parsed.toFixed(2);
+      if (key.includes("tokens_per_second")) return general();
+      return general();
+    }
+
+    function parseCsv(text) {
+      const rows = [];
+      let row = [];
+      let value = "";
+      let quoted = false;
+      for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+        const next = text[index + 1];
+        if (quoted) {
+          if (char === '"' && next === '"') {
+            value += '"';
+            index += 1;
+          } else if (char === '"') {
+            quoted = false;
+          } else {
+            value += char;
+          }
+          continue;
+        }
+        if (char === '"') quoted = true;
+        else if (char === ",") {
+          row.push(value);
+          value = "";
+        } else if (char === "\n") {
+          row.push(value);
+          rows.push(row);
+          row = [];
+          value = "";
+        } else if (char !== "\r") {
+          value += char;
+        }
+      }
+      if (value || row.length) {
+        row.push(value);
+        rows.push(row);
+      }
+      const headers = rows.shift() || [];
+      return rows
+        .filter(item => item.some(cell => cell.trim()))
+        .map(item => Object.fromEntries(headers.map((header, index) => [header, item[index] ?? ""])));
+    }
+
+    function percentileScores(values, lowerIsBetter) {
+      if (values.length === 1) return [100];
+      const sorted = values.map((value, index) => ({ value, index })).sort((a, b) => a.value - b.value);
+      const scores = Array(values.length).fill(0);
+      let index = 0;
+      while (index < sorted.length) {
+        let end = index + 1;
+        while (end < sorted.length && sorted[end].value === sorted[index].value) end += 1;
+        const averageRank = (index + end - 1) / 2;
+        const percentile = 100 * averageRank / (values.length - 1);
+        for (let itemIndex = index; itemIndex < end; itemIndex += 1) {
+          scores[sorted[itemIndex].index] = lowerIsBetter ? 100 - percentile : percentile;
+        }
+        index = end;
+      }
+      return scores;
+    }
+
+    function dominates(challenger, target, categories, better) {
+      let atLeastAll = true;
+      let strictOne = false;
+      for (const category of categories) {
+        const lowerBetter = isLowerBetter(category);
+        const challengerValue = challenger.graph[category];
+        const targetValue = target.graph[category];
+        const atLeast = better
+          ? (lowerBetter ? challengerValue <= targetValue : challengerValue >= targetValue)
+          : (lowerBetter ? challengerValue >= targetValue : challengerValue <= targetValue);
+        const strict = better
+          ? (lowerBetter ? challengerValue < targetValue : challengerValue > targetValue)
+          : (lowerBetter ? challengerValue > targetValue : challengerValue < targetValue);
+        atLeastAll = atLeastAll && atLeast;
+        strictOne = strictOne || strict;
+      }
+      return atLeastAll && strictOne;
+    }
+
+    function computePareto(scoredRows, categories) {
+      if (![2, 3].includes(categories.length)) {
+        return scoredRows.map(() => ({ optimal: false, suboptimal: false }));
+      }
+      return scoredRows.map(row => {
+        let optimal = true;
+        let suboptimal = true;
+        for (const other of scoredRows) {
+          if (other === row) continue;
+          if (dominates(other, row, categories, true)) optimal = false;
+          if (dominates(other, row, categories, false)) suboptimal = false;
+        }
+        return { optimal, suboptimal };
+      });
+    }
+
+    function tableColumns(headers, numericKeys) {
+      const keys = mainColumnKeys.filter(key => key === "final_score" || headers.includes(key));
+      return keys.map(key => ({ key, label: key === "final_score" ? "Final Score" : labelFor(key), numeric: key === "final_score" || numericKeys.has(key) }));
+    }
+
+    function scoreSourceRows(categories) {
+      const completeRows = [];
+      const valuesByCategory = Object.fromEntries(categories.map(category => [category, []]));
+      for (const raw of sourceRows) {
+        const graph = {};
+        let complete = true;
+        for (const category of categories) {
+          const parsed = parseNumber(raw[category]);
+          if (parsed === null) {
+            complete = false;
+            break;
+          }
+          graph[category] = parsed;
+        }
+        if (!complete) continue;
+        const row = { raw, graph, score: 0, cells: {}, model: raw.model || "" };
+        completeRows.push(row);
+        for (const category of categories) valuesByCategory[category].push(graph[category]);
+      }
+
+      const scoresByCategory = Object.fromEntries(
+        categories.map(category => [category, percentileScores(valuesByCategory[category], isLowerBetter(category))]),
+      );
+      for (const [rowIndex, row] of completeRows.entries()) {
+        const score = categories.reduce((sum, category) => sum + scoresByCategory[category][rowIndex], 0) / categories.length;
+        row.score = Math.round(score * 10000) / 10000;
+        row.graph.final_score = row.score;
+      }
+      completeRows.sort((left, right) => right.score - left.score);
+      const pareto = computePareto(completeRows, categories);
+      for (const [rowIndex, row] of completeRows.entries()) {
+        row.pareto = pareto[rowIndex];
+        for (const column of payload.columns) {
+          const rawValue = column.key === "final_score" ? row.score : row.raw[column.key];
+          const numericValue = column.key === "final_score" ? row.score : parseNumber(rawValue);
+          row.cells[column.key] = {
+            display: formatValue(column.key, rawValue),
+            sort: numericValue ?? String(rawValue || ""),
+          };
+        }
+      }
+      return completeRows;
+    }
+
+    function scoreEmbeddedRows(categories) {
+      const completeRows = [];
+      const valuesByCategory = Object.fromEntries(categories.map(category => [category, []]));
+      for (const original of embeddedRows) {
+        const graph = {};
+        let complete = true;
+        for (const category of categories) {
+          const parsed = parseNumber(original.graph[category]);
+          if (parsed === null) {
+            complete = false;
+            break;
+          }
+          graph[category] = parsed;
+        }
+        if (!complete) continue;
+        const row = {
+          ...original,
+          graph: { ...original.graph, ...graph },
+          cells: { ...original.cells },
+          score: 0,
+        };
+        completeRows.push(row);
+        for (const category of categories) valuesByCategory[category].push(graph[category]);
+      }
+
+      const scoresByCategory = Object.fromEntries(
+        categories.map(category => [category, percentileScores(valuesByCategory[category], isLowerBetter(category))]),
+      );
+      for (const [rowIndex, row] of completeRows.entries()) {
+        const score = categories.reduce((sum, category) => sum + scoresByCategory[category][rowIndex], 0) / categories.length;
+        row.score = Math.round(score * 10000) / 10000;
+        row.cells.final_score = {
+          display: formatValue("final_score", row.score),
+          sort: row.score,
+        };
+      }
+      completeRows.sort((left, right) => right.score - left.score);
+      const pareto = computePareto(completeRows, categories);
+      for (const [rowIndex, row] of completeRows.entries()) row.pareto = pareto[rowIndex];
+      return completeRows;
+    }
+
+    function updateScoreScale() {
+      const scoreValues = rows.map(row => row.score).sort((a, b) => a - b);
+      minScore = scoreValues[0] ?? 0;
+      maxScore = scoreValues[scoreValues.length - 1] ?? 100;
+      medianScore = scoreValues.length
+        ? scoreValues[Math.floor((scoreValues.length - 1) / 2)]
+        : 50;
+    }
+
+    function updateSummary() {
+      document.getElementById("summary").textContent =
+        `${rows.length} models ranked by ${payload.categories.map(c => c.label).join(", ")}`;
+      document.getElementById("controlNote").textContent =
+        "Selected metrics are evaluated in order; the first two or three also define the chart axes.";
+    }
+
+    function resetChartCanvas() {
+      const canvas = document.getElementById("chart");
+      const replacement = canvas.cloneNode(false);
+      canvas.replaceWith(replacement);
+      document.getElementById("tooltip").style.display = "none";
+    }
+
+    function applySelection() {
+      if (!selectedCategories.length) return;
+      payload.categories = selectedCategories.map(key => ({
+        key,
+        label: labelFor(key),
+        lowerIsBetter: isLowerBetter(key),
+      }));
+      payload.graphCategories = [2, 3].includes(selectedCategories.length) ? selectedCategories.slice() : [];
+      if (sourceRows.length) {
+        const headers = Object.keys(sourceRows[0] || {});
+        const numericKeys = new Set(availableCategories.map(category => category.key));
+        payload.columns = tableColumns(headers, numericKeys);
+        rows = scoreSourceRows(selectedCategories);
+        payload.rows = rows;
+      } else {
+        rows = scoreEmbeddedRows(selectedCategories);
+        payload.rows = rows;
+      }
+      sortState = { key: "final_score", direction: "desc" };
+      updateScoreScale();
+      updateSummary();
+      renderSelectedMetrics();
+      renderMetricPicker();
+      renderTable();
+      resetChartCanvas();
+      drawGraph();
+    }
+
+    function renderSelectedMetrics() {
+      const container = document.getElementById("selectedMetrics");
+      container.innerHTML = "";
+      if (!selectedCategories.length) {
+        const empty = document.createElement("span");
+        empty.className = "selected-empty";
+        empty.textContent = "Select one or more metrics";
+        container.appendChild(empty);
+        return;
+      }
+      for (const [index, key] of selectedCategories.entries()) {
+        const card = document.createElement("span");
+        card.className = "metric-card";
+        const order = document.createElement("span");
+        order.className = "metric-order";
+        order.textContent = `${index + 1}.`;
+        const label = document.createElement("span");
+        label.textContent = labelFor(key);
+        const remove = document.createElement("button");
+        remove.className = "remove-metric";
+        remove.type = "button";
+        remove.title = `Remove ${labelFor(key)}`;
+        remove.textContent = "×";
+        remove.addEventListener("click", () => {
+          selectedCategories = selectedCategories.filter(category => category !== key);
+          renderSelectedMetrics();
+          renderMetricPicker();
+        });
+        card.append(order, label, remove);
+        container.appendChild(card);
+      }
+    }
+
+    function renderMetricPicker() {
+      const corePicker = document.getElementById("coreMetricPicker");
+      const otherPicker = document.getElementById("otherMetricPicker");
+      corePicker.innerHTML = "";
+      otherPicker.innerHTML = "";
+
+      function addButton(category, container) {
+        const button = document.createElement("button");
+        button.className = "metric-button";
+        button.type = "button";
+        button.textContent = `${category.label}${category.lowerIsBetter ? " ↓" : " ↑"}`;
+        button.disabled = selectedCategories.includes(category.key);
+        button.addEventListener("click", () => {
+          selectedCategories.push(category.key);
+          renderSelectedMetrics();
+          renderMetricPicker();
+        });
+        container.appendChild(button);
+      }
+
+      const categoriesByKey = new Map(availableCategories.map(category => [category.key, category]));
+      for (const key of coreCategoryKeys) {
+        const category = categoriesByKey.get(key);
+        if (category) addButton(category, corePicker);
+      }
+      for (const category of availableCategories) {
+        if (!coreCategoryKeys.includes(category.key)) addButton(category, otherPicker);
+      }
+    }
+
+    function clearMetrics() {
+      selectedCategories = [];
+      renderSelectedMetrics();
+      renderMetricPicker();
+    }
+
+    function initializeFromCsv(csvRows) {
+      sourceRows = csvRows;
+      const headers = Object.keys(csvRows[0] || {});
+      const numericKeys = headers.filter(header => csvRows.some(row => parseNumber(row[header]) !== null));
+      const discoveredCategories = numericKeys
+        .filter(key => key !== "final_score")
+        .map(key => ({ key, label: labelFor(key), lowerIsBetter: isLowerBetter(key) }));
+      availableCategories = [
+        ...coreCategoryKeys
+          .map(key => discoveredCategories.find(category => category.key === key))
+          .filter(Boolean),
+        ...discoveredCategories.filter(category => !coreCategoryKeys.includes(category.key)),
+      ];
+      applySelection();
+    }
 
     function interpolate(a, b, t) {
       return Math.round(a + (b - a) * Math.max(0, Math.min(1, t)));
@@ -662,8 +1312,12 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
 
     function drawGraph() {
-      if (![2, 3].includes(payload.graphCategories.length)) return;
-      document.getElementById("chartSection").hidden = false;
+      const chartSection = document.getElementById("chartSection");
+      if (![2, 3].includes(payload.graphCategories.length)) {
+        chartSection.hidden = true;
+        return;
+      }
+      chartSection.hidden = false;
       document.getElementById("chartTitle").textContent =
         payload.graphCategories.length === 2 ? "2D category comparison" : "3D category comparison";
       document.getElementById("resetCamera").hidden = payload.graphCategories.length !== 3;
@@ -1184,8 +1838,22 @@ HTML_TEMPLATE = r"""<!doctype html>
         .replaceAll("'", "&#039;");
     }
 
+    document.getElementById("runComparison").addEventListener("click", applySelection);
+    document.getElementById("clearMetrics").addEventListener("click", clearMetrics);
+    renderMetricPicker();
+    renderSelectedMetrics();
+    updateScoreScale();
+    updateSummary();
     renderTable();
     drawGraph();
+
+    fetch("results.csv")
+      .then(response => response.ok ? response.text() : Promise.reject(new Error("results.csv not found")))
+      .then(text => initializeFromCsv(parseCsv(text)))
+      .catch(() => {
+        updateScoreScale();
+        updateSummary();
+      });
   </script>
 </body>
 </html>

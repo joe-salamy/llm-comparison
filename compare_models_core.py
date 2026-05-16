@@ -341,15 +341,20 @@ def json_ready_rows(
                 ),
             }
 
-        raw_values = cast(dict[str, float], row["_raw_values"])
+        raw_values = cast(dict[str, float], row.get("_raw_values", {}))
+        graph = {}
+        for category in graph_categories:
+            value = raw_values.get(category)
+            if value is None:
+                value = parse_float(str(row.get(category, "")))
+            if value is not None:
+                graph[category] = value
         output.append(
             {
                 "model": row["model"],
                 "score": row[FINAL_SCORE],
                 "cells": cells,
-                "graph": {
-                    category: raw_values[category] for category in graph_categories
-                },
+                "graph": graph,
                 "pareto": (
                     pareto[row_index] if row_index < len(pareto) else default_flag
                 ),
@@ -364,16 +369,19 @@ def write_html(
     columns: list[Column],
     categories: list[str],
     pareto: list[ParetoFlag],
+    available_categories: list[str] | None = None,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     graph_categories = categories if len(categories) in {2, 3} else []
+    available_categories = available_categories or categories
+    graph_value_categories = list(dict.fromkeys([*categories, *available_categories]))
     payload = {
         "columns": [
             {"key": column.key, "label": column.label, "numeric": column.numeric}
             for column in columns
         ],
-        "rows": json_ready_rows(rows, columns, graph_categories, pareto),
+        "rows": json_ready_rows(rows, columns, graph_value_categories, pareto),
         "categories": [
             {
                 "key": category,
@@ -381,6 +389,14 @@ def write_html(
                 "lowerIsBetter": is_lower_better(category),
             }
             for category in categories
+        ],
+        "availableCategories": [
+            {
+                "key": category,
+                "label": DISPLAY_LABELS.get(category, category),
+                "lowerIsBetter": is_lower_better(category),
+            }
+            for category in available_categories
         ],
         "graphCategories": graph_categories,
     }
