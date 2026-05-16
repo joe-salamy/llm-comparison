@@ -854,14 +854,14 @@ HTML_TEMPLATE = r"""<!doctype html>
       const ranges = categories.map(metricRange);
       const trend = fit3DTrend(payload.rows, categories, ranges);
       const tooltip = document.getElementById("tooltip");
-      const initialCamera = { rotationX: -0.62, rotationY: -2.36, zoom: 1 };
+      const initialCamera = { rotationX: 0.62, rotationY: 0.78, zoom: 1 };
       const viewPresets = {
         front: { rotationX: 0, rotationY: 0, zoom: 1.1 },
         back: { rotationX: 0, rotationY: Math.PI, zoom: 1.1 },
-        right: { rotationX: 0, rotationY: -Math.PI / 2, zoom: 1.1 },
-        left: { rotationX: 0, rotationY: Math.PI / 2, zoom: 1.1 },
-        top: { rotationX: -Math.PI / 2, rotationY: 0, zoom: 1.1 },
-        bottom: { rotationX: Math.PI / 2, rotationY: 0, zoom: 1.1 },
+        right: { rotationX: 0, rotationY: Math.PI / 2, zoom: 1.1 },
+        left: { rotationX: 0, rotationY: -Math.PI / 2, zoom: 1.1 },
+        top: { rotationX: Math.PI / 2, rotationY: 0, zoom: 1.1 },
+        bottom: { rotationX: -Math.PI / 2, rotationY: 0, zoom: 1.1 },
         isometric: initialCamera,
       };
       let rotationX = initialCamera.rotationX;
@@ -915,7 +915,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 
       function project(rotated, width, height) {
         const scale = Math.min(width, height) * 0.28 * zoom;
-        const perspective = 1 / (1 + (rotated.z + 2.8) * 0.12);
+        const perspective = 1 / (1 + (2.8 - rotated.z) * 0.12);
         return {
           x: width / 2 + rotated.x * scale * perspective,
           y: height / 2 - rotated.y * scale * perspective,
@@ -1120,8 +1120,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       window.addEventListener("mouseup", () => dragging = false);
       window.addEventListener("mousemove", event => {
         if (dragging) {
-          rotationY += (event.clientX - last.x) * 0.01;
-          rotationX -= (event.clientY - last.y) * 0.01;
+          rotationY -= (event.clientX - last.x) * 0.01;
+          rotationX += (event.clientY - last.y) * 0.01;
           rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotationX));
           last = { x: event.clientX, y: event.clientY };
           render();
