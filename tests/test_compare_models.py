@@ -126,3 +126,31 @@ def test_3d_trend_renders_as_line_not_plane(tmp_path: Path) -> None:
     assert "function fit3DTrendLine(" in html
     assert "function drawTrendLine(" in html
     assert "function drawTrendPlane(" not in html
+
+
+def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "one",
+            "quality": "1",
+            "cost": "2",
+            "_raw_values": {"quality": 1.0, "cost": 2.0},
+            FINAL_SCORE: 100.0,
+        }
+    ]
+
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality"],
+        [{"optimal": True, "suboptimal": False}],
+        ["quality", "cost"],
+    )
+
+    html = output.read_text(encoding="utf-8")
+    assert 'params.get("metrics")' in html
+    assert "function orderedValidMetricKeys(keys)" in html
+    assert 'url.searchParams.set("metrics", selectedCategories.join(","))' in html
+    assert 'applySelection({ syncUrl: true })' in html
