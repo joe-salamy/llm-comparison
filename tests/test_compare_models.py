@@ -179,7 +179,7 @@ def test_3d_zoom_indicator_is_rendered_and_updated(tmp_path: Path) -> None:
 
     html = output.read_text(encoding="utf-8")
     assert 'id="zoomIndicator"' in html
-    assert "top: 140px;" in html
+    assert "top: 156px;" in html
     assert "function updateZoomIndicator()" in html
     assert 'zoomIndicator.textContent = `${zoom.toFixed(2)}x`' in html
 
