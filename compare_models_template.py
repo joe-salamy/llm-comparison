@@ -874,10 +874,10 @@ HTML_TEMPLATE = r"""<!doctype html>
         return ((row.graph[category.key] - range.min) / range.span) * 2 - 1;
       }
 
-      function setCamera(camera) {
+      function setCamera(camera, { preserveZoom = false } = {}) {
         rotationX = camera.rotationX;
         rotationY = camera.rotationY;
-        zoom = camera.zoom;
+        if (!preserveZoom) zoom = camera.zoom;
         render();
       }
 
@@ -1158,7 +1158,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         const button = event.target.closest?.("button[data-view]");
         if (!button) return;
         const preset = viewPresets[button.dataset.view];
-        if (preset) setCamera(preset);
+        if (preset) setCamera(preset, { preserveZoom: true });
       });
       window.addEventListener("resize", render);
       render();
