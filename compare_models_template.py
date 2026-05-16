@@ -621,6 +621,43 @@ HTML_TEMPLATE = r"""<!doctype html>
       return displayLabels[key] || key.replaceAll("_", " ");
     }
 
+    function orderedValidMetricKeys(keys) {
+      const availableKeys = new Set(availableCategories.map(category => category.key));
+      const seen = new Set();
+      return keys.filter(key => {
+        if (!availableKeys.has(key) || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    function metricKeysFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const rawMetrics = params.get("metrics");
+      if (!rawMetrics) return [];
+      return orderedValidMetricKeys(
+        rawMetrics
+          .split(",")
+          .map(key => key.trim())
+          .filter(Boolean),
+      );
+    }
+
+    function applyUrlMetrics() {
+      const metrics = metricKeysFromUrl();
+      if (metrics.length) selectedCategories = metrics;
+    }
+
+    function updateMetricsUrl() {
+      const url = new URL(window.location.href);
+      if (selectedCategories.length) {
+        url.searchParams.set("metrics", selectedCategories.join(","));
+      } else {
+        url.searchParams.delete("metrics");
+      }
+      window.history.replaceState({}, "", url);
+    }
+
     function parseNumber(value) {
       if (value === null || value === undefined) return null;
       const text = String(value).trim();
@@ -858,7 +895,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       chartDisposers.push(() => target.removeEventListener(type, handler, options));
     }
 
-    function applySelection() {
+    function applySelection({ syncUrl = false } = {}) {
       if (!selectedCategories.length) return;
       payload.categories = selectedCategories.map(key => ({
         key,
@@ -884,6 +921,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       renderTable();
       resetChartCanvas();
       drawGraph();
+      if (syncUrl) updateMetricsUrl();
     }
 
     function renderSelectedMetrics() {
@@ -968,6 +1006,7 @@ HTML_TEMPLATE = r"""<!doctype html>
           .filter(Boolean),
         ...discoveredCategories.filter(category => !coreCategoryKeys.includes(category.key)),
       ];
+      applyUrlMetrics();
       applySelection();
     }
 
@@ -1915,7 +1954,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         .replaceAll("'", "&#039;");
     }
 
-    document.getElementById("runComparison").addEventListener("click", applySelection);
+    document.getElementById("runComparison").addEventListener("click", () => applySelection({ syncUrl: true }));
     document.getElementById("clearMetrics").addEventListener("click", clearMetrics);
     document.getElementById("fullscreenChart").addEventListener("click", () => {
       const chartSection = document.getElementById("chartSection");
@@ -1926,6 +1965,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       updateFullscreenButton();
       if (chartRender) chartRender();
     });
+    applyUrlMetrics();
     renderMetricPicker();
     renderSelectedMetrics();
     updateScoreScale();
