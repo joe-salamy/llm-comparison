@@ -52,3 +52,34 @@ def test_write_html_escapes_script_closing_tags(tmp_path: Path) -> None:
     html = output.read_text(encoding="utf-8")
     assert "</script><script>alert" not in html
     assert "<\\/script>" in html
+
+
+def test_chart_type_uses_active_scoring_categories(tmp_path: Path) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "one",
+            "quality": "1",
+            "cost": "2",
+            "_raw_values": {"quality": 1.0, "cost": 2.0, "speed": 3.0},
+            FINAL_SCORE: 100.0,
+        }
+    ]
+
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality", "cost"],
+        [{"optimal": True, "suboptimal": False}],
+        ["quality", "cost", "speed"],
+    )
+
+    html = output.read_text(encoding="utf-8")
+    assert '"categories": [{"key": "quality"' in html
+    assert '"graphCategories": ["quality", "cost"]' in html
+    assert "function chartCategories()" in html
+    stale_chart_branch = (
+        'payload.graphCategories.length === 2 ? "2D category comparison"'
+    )
+    assert stale_chart_branch not in html
