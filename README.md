@@ -15,10 +15,11 @@ python -m pip install -e ".[dev]"
 
 ## Data
 
-The comparison script uses `data/results.csv` as its source of truth. Generated reports are written to the repository root.
+The comparison script uses `results.csv` as its source of truth. Generated
+reports are written to the repository root.
 
-Raw copied source text lives in `data/input.txt`. Converted Markdown and CSV
-outputs live in `data/results.md` and `data/results.csv`.
+Raw copied source text lives in `input.txt`. Converted Markdown and CSV outputs
+live in `results.md` and `results.csv`.
 
 ## Compare Models
 
@@ -30,7 +31,7 @@ python compare_models.py price intelligence latency
 python compare_models.py price intelligence speed latency --all-columns
 ```
 
-By default, the script writes `model_comparison.html`. Use `--output` to choose a different report path:
+By default, the script writes `index.html`. Use `--output` to choose a different report path:
 
 ```powershell
 python compare_models.py price intelligence --output quality_vs_price.html
@@ -62,10 +63,10 @@ Use `convert_results.py` to convert copied Artificial Analysis source text into 
 1. Go to https://artificialanalysis.ai/leaderboards/models
 2. Expand all columns
 3. Copy from "Features" through last "Model, Providers"
-4. Paste into `data/input.txt`
+4. Paste into `input.txt`
 5. Run `python convert_results.py`
 
-By default, the converter writes `data/results.md` and `data/results.csv`.
+By default, the converter writes `results.md` and `results.csv`.
 
 ## Development
 

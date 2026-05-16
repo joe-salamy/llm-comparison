@@ -10,8 +10,8 @@ from typing import Any, cast
 
 from compare_models_template import HTML_TEMPLATE
 
-DEFAULT_INPUT = Path("data/results.csv")
-DEFAULT_OUTPUT = Path("model_comparison.html")
+DEFAULT_INPUT = Path("results.csv")
+DEFAULT_OUTPUT = Path("index.html")
 ParetoFlag = dict[str, bool]
 
 DISPLAY_LABELS = {

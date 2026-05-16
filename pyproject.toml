@@ -7,6 +7,14 @@ requires-python = ">=3.11"
 license = "MIT"
 dependencies = []
 
+[tool.setuptools]
+py-modules = [
+    "compare_models",
+    "compare_models_core",
+    "compare_models_template",
+    "convert_results",
+]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",

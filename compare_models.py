@@ -21,7 +21,7 @@ from compare_models_core import (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Rank LLMs from data/results.csv across one or more categories and "
+            "Rank LLMs from results.csv across one or more categories and "
             "write an interactive HTML comparison report to the repository root."
         )
     )

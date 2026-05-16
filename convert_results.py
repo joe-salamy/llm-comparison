@@ -5,9 +5,9 @@ import csv
 import re
 from pathlib import Path
 
-DEFAULT_INPUT = Path("data/input.txt")
-DEFAULT_MARKDOWN = Path("data/results.md")
-DEFAULT_CSV = Path("data/results.csv")
+DEFAULT_INPUT = Path("input.txt")
+DEFAULT_MARKDOWN = Path("results.md")
+DEFAULT_CSV = Path("results.csv")
 
 DISPLAY_HEADERS = [
     "Model",
