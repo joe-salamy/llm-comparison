@@ -18,8 +18,8 @@ python -m pip install -e ".[dev]"
 The comparison script uses `results.csv` as its source of truth. Generated
 reports are written to the repository root.
 
-Raw copied source text lives in `input.txt`. Converted Markdown and CSV outputs
-live in `results.md` and `results.csv`.
+Raw copied source text lives in `input.txt`. Converted CSV output lives in
+`results.csv`.
 
 ## Compare Models
 
@@ -58,7 +58,7 @@ Common aliases include `intelligence`, `price`, `speed`, `latency`, and `respons
 
 ## Convert Raw Results
 
-Use `convert_results.py` to convert copied Artificial Analysis source text into Markdown and CSV outputs.
+Use `convert_results.py` to convert copied Artificial Analysis source text into CSV output.
 
 1. Go to https://artificialanalysis.ai/leaderboards/models
 2. Expand all columns
@@ -66,7 +66,7 @@ Use `convert_results.py` to convert copied Artificial Analysis source text into 
 4. Paste into `input.txt`
 5. Run `python convert_results.py`
 
-By default, the converter writes `results.md` and `results.csv`.
+By default, the converter writes `results.csv`.
 
 ## Development
 

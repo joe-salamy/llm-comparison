@@ -243,7 +243,6 @@ HTML_TEMPLATE = r"""<!doctype html>
         <h1>LLM Comparison</h1>
         <div class="meta" id="summary"></div>
       </div>
-      <div class="meta">Click column headers to sort.</div>
     </header>
     <section class="chart-wrap" id="chartSection" hidden>
       <div class="chart-title">

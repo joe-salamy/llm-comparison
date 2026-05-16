@@ -6,7 +6,6 @@ import re
 from pathlib import Path
 
 DEFAULT_INPUT = Path("input.txt")
-DEFAULT_MARKDOWN = Path("results.md")
 DEFAULT_CSV = Path("results.csv")
 
 DISPLAY_HEADERS = [
@@ -47,17 +46,6 @@ DISPLAY_HEADERS = [
     "Total Response Time (s)",
     "Reasoning Time (s)",
 ]
-
-MAIN_DISPLAY_HEADERS = {
-    "Model",
-    "Context Window",
-    "Creator",
-    "Artificial Analysis Intelligence Index",
-    "Blended (USD/1M Tokens)",
-    "Median (Tokens/s)",
-    "First Chunk Latency (s)",
-    "Total Response Time (s)",
-}
 
 CSV_HEADERS = [
     "model",
@@ -147,31 +135,6 @@ def parse_input(path: Path) -> list[list[str]]:
     return rows
 
 
-def markdown_escape(value: str) -> str:
-    return value.replace("|", "\\|")
-
-
-def markdown_header(value: str) -> str:
-    escaped = markdown_escape(value)
-    return f"**{escaped}**" if value in MAIN_DISPLAY_HEADERS else escaped
-
-
-def write_markdown(rows: list[list[str]], path: Path) -> None:
-    with path.open("w", encoding="utf-8", newline="\n") as output:
-        output.write("# LLM Comparison Results\n\n")
-        output.write(
-            "| "
-            + " | ".join(markdown_header(header) for header in DISPLAY_HEADERS)
-            + " |\n"
-        )
-        output.write("| " + " | ".join("---" for _ in DISPLAY_HEADERS) + " |\n")
-
-        for row in rows:
-            output.write(
-                "| " + " | ".join(markdown_escape(cell) for cell in row) + " |\n"
-            )
-
-
 def parse_context_window(value: str) -> str:
     match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)([kKmM])", value)
     if not match:
@@ -215,19 +178,15 @@ def write_csv(rows: list[list[str]], path: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description=(
-            "Convert copied Artificial Analysis leaderboard data into Markdown and CSV."
-        )
+        description="Convert copied Artificial Analysis leaderboard data into CSV."
     )
     parser.add_argument("--input", default=DEFAULT_INPUT, type=Path)
-    parser.add_argument("--markdown", default=DEFAULT_MARKDOWN, type=Path)
     parser.add_argument("--csv", default=DEFAULT_CSV, type=Path)
     args = parser.parse_args()
 
     rows = parse_input(args.input)
-    write_markdown(rows, args.markdown)
     write_csv(rows, args.csv)
-    print(f"Wrote {len(rows)} rows to {args.markdown} and {args.csv}")
+    print(f"Wrote {len(rows)} rows to {args.csv}")
 
 
 if __name__ == "__main__":
