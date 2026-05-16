@@ -275,7 +275,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       border: 1px solid var(--line);
       border-radius: 6px;
       background: #f7f8f5;
-      color: var(--text);
+      color: var(--ink);
       cursor: pointer;
       font: inherit;
       font-size: 12px;
@@ -287,6 +287,24 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
     .chart-canvas-wrap {
       position: relative;
+    }
+    .chart-wrap:fullscreen {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      margin: 0;
+      padding: 16px;
+      border: 0;
+      border-radius: 0;
+      background: var(--panel);
+    }
+    .chart-wrap:fullscreen .chart-canvas-wrap {
+      flex: 1;
+      min-height: 0;
+    }
+    .chart-wrap:fullscreen #chart {
+      height: 100%;
     }
     .view-cube {
       position: absolute;
@@ -479,6 +497,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       <div class="chart-title">
         <div id="chartTitle"></div>
         <div class="chart-actions">
+          <button class="chart-button" id="fullscreenChart" type="button">Full screen</button>
           <button class="chart-button" id="resetCamera" type="button" hidden>Reset view</button>
           <div class="legend">
             <span><i class="dot green"></i>Pareto optimal</span>
@@ -592,6 +611,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     let maxScore = 100;
     let medianScore = 50;
     let chartDisposers = [];
+    let chartRender = null;
 
     function isLowerBetter(key) {
       return lowerIsBetterMarkers.some(marker => key.includes(marker));
@@ -826,6 +846,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     function resetChartCanvas() {
       for (const dispose of chartDisposers) dispose();
       chartDisposers = [];
+      chartRender = null;
       const canvas = document.getElementById("chart");
       const replacement = canvas.cloneNode(false);
       canvas.replaceWith(replacement);
@@ -1039,9 +1060,28 @@ HTML_TEMPLATE = r"""<!doctype html>
       return "#275c8f";
     }
 
+    function isChartFullscreen() {
+      return document.fullscreenElement === document.getElementById("chartSection");
+    }
+
+    function updateFullscreenButton() {
+      const button = document.getElementById("fullscreenChart");
+      button.textContent = isChartFullscreen() ? "Exit full screen" : "Full screen";
+    }
+
+    function chartRenderRatio() {
+      const deviceRatio = window.devicePixelRatio || 1;
+      const qualityMultiplier = isChartFullscreen() ? 1.75 : 1.5;
+      return Math.min(3, Math.max(2, deviceRatio * qualityMultiplier));
+    }
+
+    function chartZoomScale() {
+      return isChartFullscreen() ? 2 : 1;
+    }
+
     function setupCanvas() {
       const canvas = document.getElementById("chart");
-      const ratio = window.devicePixelRatio || 1;
+      const ratio = chartRenderRatio();
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.max(1, Math.floor(rect.width * ratio));
       canvas.height = Math.max(1, Math.floor(rect.height * ratio));
@@ -1315,6 +1355,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       chartSection.hidden = false;
       document.getElementById("chartTitle").textContent =
         categories.length === 2 ? "2D category comparison" : "3D category comparison";
+      updateFullscreenButton();
       document.getElementById("resetCamera").hidden = categories.length !== 3;
       document.getElementById("viewCube").hidden = categories.length !== 3;
       if (categories.length === 2) draw2D(categories);
@@ -1479,6 +1520,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         canvas._points = projected;
       }
 
+      chartRender = render;
       const canvas = document.getElementById("chart");
       trackChartListener(canvas, "mousemove", event => {
         const rect = canvas.getBoundingClientRect();
@@ -1576,7 +1618,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       }
 
       function project(rotated, width, height) {
-        const scale = Math.min(width, height) * 0.28 * zoom;
+        const scale = Math.min(width, height) * 0.28 * zoom * chartZoomScale();
         const perspective = 1 / (1 + (2.8 - rotated.z) * 0.12);
         return {
           x: width / 2 + rotated.x * scale * perspective,
@@ -1849,6 +1891,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         if (preset) setCamera(preset, { preserveZoom: true });
       });
       trackChartListener(window, "resize", render);
+      chartRender = render;
       render();
     }
 
@@ -1874,6 +1917,15 @@ HTML_TEMPLATE = r"""<!doctype html>
 
     document.getElementById("runComparison").addEventListener("click", applySelection);
     document.getElementById("clearMetrics").addEventListener("click", clearMetrics);
+    document.getElementById("fullscreenChart").addEventListener("click", () => {
+      const chartSection = document.getElementById("chartSection");
+      if (isChartFullscreen()) document.exitFullscreen?.();
+      else chartSection.requestFullscreen?.();
+    });
+    document.addEventListener("fullscreenchange", () => {
+      updateFullscreenButton();
+      if (chartRender) chartRender();
+    });
     renderMetricPicker();
     renderSelectedMetrics();
     updateScoreScale();
