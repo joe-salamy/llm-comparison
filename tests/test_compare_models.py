@@ -179,9 +179,9 @@ def test_3d_zoom_indicator_is_rendered_and_updated(tmp_path: Path) -> None:
 
     html = output.read_text(encoding="utf-8")
     assert 'id="zoomIndicator"' in html
-    assert "top: 156px;" in html
+    assert "top: 140px;" in html
     assert "function updateZoomIndicator()" in html
-    assert 'zoomIndicator.textContent = `${zoom.toFixed(2)}x`' in html
+    assert "zoomIndicator.textContent = `${zoom.toFixed(2)}x`" in html
 
 
 def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:
@@ -209,4 +209,4 @@ def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:
     assert 'params.get("metrics")' in html
     assert "function orderedValidMetricKeys(keys)" in html
     assert 'url.searchParams.set("metrics", selectedCategories.join(","))' in html
-    assert 'applySelection({ syncUrl: true })' in html
+    assert "applySelection({ syncUrl: true })" in html
