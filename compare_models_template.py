@@ -326,6 +326,28 @@ HTML_TEMPLATE = r"""<!doctype html>
     .view-cube[hidden] {
       display: none;
     }
+    .zoom-indicator {
+      position: absolute;
+      top: 126px;
+      right: 12px;
+      z-index: 3;
+      min-width: 58px;
+      padding: 5px 8px;
+      border: 1px solid rgba(116, 125, 117, 0.42);
+      border-radius: 6px;
+      background: rgba(247, 248, 245, 0.92);
+      box-shadow: 0 10px 28px rgba(28, 31, 29, 0.10);
+      color: #2f3831;
+      font-size: 11px;
+      font-weight: 720;
+      line-height: 1;
+      text-align: center;
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+    }
+    .zoom-indicator[hidden] {
+      display: none;
+    }
     .view-cube button {
       min-width: 0;
       border: 1px solid rgba(116, 125, 117, 0.42);
@@ -520,6 +542,7 @@ HTML_TEMPLATE = r"""<!doctype html>
           <button type="button" data-view="bottom" title="Bottom view">Bottom</button>
           <span></span>
         </div>
+        <div class="zoom-indicator" id="zoomIndicator" aria-live="polite" hidden>1.00x</div>
       </div>
     </section>
     <div class="table-wrap">
@@ -1397,6 +1420,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       updateFullscreenButton();
       document.getElementById("resetCamera").hidden = categories.length !== 3;
       document.getElementById("viewCube").hidden = categories.length !== 3;
+      document.getElementById("zoomIndicator").hidden = categories.length !== 3;
       if (categories.length === 2) draw2D(categories);
       else draw3D(categories);
     }
@@ -1613,6 +1637,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       let last = { x: 0, y: 0 };
       const hoverRadius = 18;
       const viewCube = document.getElementById("viewCube");
+      const zoomIndicator = document.getElementById("zoomIndicator");
 
       function norm(row, category, range) {
         return ((row.graph[category.key] - range.min) / range.span) * 2 - 1;
@@ -1642,6 +1667,10 @@ HTML_TEMPLATE = r"""<!doctype html>
           const preset = viewPresets[button.dataset.view];
           button.classList.toggle("active", Boolean(preset && cameraMatches(preset)));
         }
+      }
+
+      function updateZoomIndicator() {
+        zoomIndicator.textContent = `${zoom.toFixed(2)}x`;
       }
 
       function rotate(point) {
@@ -1733,6 +1762,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       function render() {
         const { canvas, ctx, width, height } = setupCanvas();
         updateViewCubeActiveState();
+        updateZoomIndicator();
         ctx.clearRect(0, 0, width, height);
         ctx.fillStyle = "#4f5851";
         ctx.font = "12px sans-serif";

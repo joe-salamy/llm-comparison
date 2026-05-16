@@ -156,6 +156,33 @@ def test_3d_default_camera_starts_slightly_zoomed_in(tmp_path: Path) -> None:
     assert expected_camera in html
 
 
+def test_3d_zoom_indicator_is_rendered_and_updated(tmp_path: Path) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "one",
+            "quality": "1",
+            "cost": "3",
+            "speed": "2",
+            "_raw_values": {"quality": 1.0, "cost": 3.0, "speed": 2.0},
+            FINAL_SCORE: 10.0,
+        }
+    ]
+
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality", "cost", "speed"],
+        [{"optimal": True, "suboptimal": False}],
+    )
+
+    html = output.read_text(encoding="utf-8")
+    assert 'id="zoomIndicator"' in html
+    assert "function updateZoomIndicator()" in html
+    assert 'zoomIndicator.textContent = `${zoom.toFixed(2)}x`' in html
+
+
 def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:
     output = tmp_path / "report.html"
     rows = [
