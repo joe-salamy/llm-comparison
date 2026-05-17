@@ -184,6 +184,37 @@ def test_3d_zoom_indicator_is_rendered_and_updated(tmp_path: Path) -> None:
     assert "zoomIndicator.textContent = `${zoom.toFixed(2)}x`" in html
 
 
+def test_mobile_3d_chart_supports_scrolling_and_fullscreen_fallback(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "one",
+            "quality": "1",
+            "cost": "3",
+            "speed": "2",
+            "_raw_values": {"quality": 1.0, "cost": 3.0, "speed": 2.0},
+            FINAL_SCORE: 10.0,
+        }
+    ]
+
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality", "cost", "speed"],
+        [{"optimal": True, "suboptimal": False}],
+    )
+
+    html = output.read_text(encoding="utf-8")
+    assert 'class="chart-scroll" id="chartScroll"' in html
+    assert ".chart-wrap.is-3d .chart-scroll" in html
+    assert "min-width: 720px;" in html
+    assert "function enterFullscreenFallback()" in html
+    assert "section.requestFullscreen" in html
+
+
 def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:
     output = tmp_path / "report.html"
     rows = [
