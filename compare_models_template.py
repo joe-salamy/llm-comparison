@@ -288,6 +288,10 @@ HTML_TEMPLATE = r"""<!doctype html>
     .chart-canvas-wrap {
       position: relative;
     }
+    .chart-scroll {
+      width: 100%;
+      overflow: visible;
+    }
     .chart-wrap:fullscreen {
       width: 100vw;
       height: 100vh;
@@ -299,12 +303,41 @@ HTML_TEMPLATE = r"""<!doctype html>
       border-radius: 0;
       background: var(--panel);
     }
+    .chart-wrap.fullscreen-fallback {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      width: 100vw;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      margin: 0;
+      padding: 16px;
+      border: 0;
+      border-radius: 0;
+      background: var(--panel);
+    }
+    body.chart-fullscreen-fallback {
+      overflow: hidden;
+    }
     .chart-wrap:fullscreen .chart-canvas-wrap {
       flex: 1;
       min-height: 0;
     }
-    .chart-wrap:fullscreen #chart {
+    .chart-wrap.fullscreen-fallback .chart-canvas-wrap {
+      flex: 1;
+      min-height: 0;
+    }
+    .chart-wrap:fullscreen .chart-scroll,
+    .chart-wrap.fullscreen-fallback .chart-scroll {
       height: 100%;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .chart-wrap:fullscreen #chart,
+    .chart-wrap.fullscreen-fallback #chart {
+      height: 100%;
+      min-width: 0;
     }
     .view-cube {
       position: absolute;
@@ -475,6 +508,28 @@ HTML_TEMPLATE = r"""<!doctype html>
       .selected-line,
       .metric-groups,
       .info-grid { grid-template-columns: 1fr; }
+      .chart-wrap {
+        padding: 10px;
+      }
+      .chart-title {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .chart-actions {
+        width: 100%;
+        flex-wrap: wrap;
+        margin-left: 0;
+      }
+      .chart-wrap.is-3d .chart-scroll {
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-inline: contain;
+        -webkit-overflow-scrolling: touch;
+      }
+      .chart-wrap.is-3d:not(:fullscreen):not(.fullscreen-fallback) #chart {
+        min-width: 720px;
+      }
       .selection-actions { display: grid; grid-template-columns: 1fr 1fr; }
       .run-button,
       .clear-button { width: 100%; }
@@ -530,7 +585,9 @@ HTML_TEMPLATE = r"""<!doctype html>
         </div>
       </div>
       <div class="chart-canvas-wrap">
-        <canvas id="chart"></canvas>
+        <div class="chart-scroll" id="chartScroll">
+          <canvas id="chart"></canvas>
+        </div>
         <div class="view-cube" id="viewCube" aria-label="3D view controls" hidden>
           <button type="button" data-view="top" title="Top view">Top</button>
           <button type="button" data-view="isometric" title="Isometric view">Iso</button>
@@ -1121,13 +1178,32 @@ HTML_TEMPLATE = r"""<!doctype html>
       return "#275c8f";
     }
 
+    function chartSection() {
+      return document.getElementById("chartSection");
+    }
+
     function isChartFullscreen() {
-      return document.fullscreenElement === document.getElementById("chartSection");
+      const section = chartSection();
+      return document.fullscreenElement === section || section.classList.contains("fullscreen-fallback");
     }
 
     function updateFullscreenButton() {
       const button = document.getElementById("fullscreenChart");
       button.textContent = isChartFullscreen() ? "Exit full screen" : "Full screen";
+    }
+
+    function enterFullscreenFallback() {
+      chartSection().classList.add("fullscreen-fallback");
+      document.body.classList.add("chart-fullscreen-fallback");
+      updateFullscreenButton();
+      if (chartRender) chartRender();
+    }
+
+    function exitFullscreenFallback() {
+      chartSection().classList.remove("fullscreen-fallback");
+      document.body.classList.remove("chart-fullscreen-fallback");
+      updateFullscreenButton();
+      if (chartRender) chartRender();
     }
 
     function chartRenderRatio() {
@@ -1414,6 +1490,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         return;
       }
       chartSection.hidden = false;
+      chartSection.classList.toggle("is-3d", categories.length === 3);
       document.getElementById("chartTitle").textContent =
         categories.length === 2 ? "2D category comparison" : "3D category comparison";
       updateFullscreenButton();
@@ -1985,14 +2062,34 @@ HTML_TEMPLATE = r"""<!doctype html>
 
     document.getElementById("runComparison").addEventListener("click", () => applySelection({ syncUrl: true }));
     document.getElementById("clearMetrics").addEventListener("click", clearMetrics);
-    document.getElementById("fullscreenChart").addEventListener("click", () => {
-      const chartSection = document.getElementById("chartSection");
-      if (isChartFullscreen()) document.exitFullscreen?.();
-      else chartSection.requestFullscreen?.();
+    document.getElementById("fullscreenChart").addEventListener("click", async () => {
+      const section = chartSection();
+      if (section.classList.contains("fullscreen-fallback")) {
+        exitFullscreenFallback();
+        return;
+      }
+      if (document.fullscreenElement === section) {
+        await document.exitFullscreen?.();
+        return;
+      }
+      if (!section.requestFullscreen) {
+        enterFullscreenFallback();
+        return;
+      }
+      try {
+        await section.requestFullscreen();
+      } catch {
+        enterFullscreenFallback();
+      }
     });
     document.addEventListener("fullscreenchange", () => {
       updateFullscreenButton();
       if (chartRender) chartRender();
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && chartSection().classList.contains("fullscreen-fallback")) {
+        exitFullscreenFallback();
+      }
     });
     applyUrlMetrics();
     renderMetricPicker();
