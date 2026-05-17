@@ -184,7 +184,7 @@ def test_3d_zoom_indicator_is_rendered_and_updated(tmp_path: Path) -> None:
     assert "zoomIndicator.textContent = `${zoom.toFixed(2)}x`" in html
 
 
-def test_mobile_3d_chart_supports_scrolling_and_fullscreen_fallback(
+def test_mobile_3d_chart_supports_touch_controls_and_fullscreen_fallback(
     tmp_path: Path,
 ) -> None:
     output = tmp_path / "report.html"
@@ -209,8 +209,10 @@ def test_mobile_3d_chart_supports_scrolling_and_fullscreen_fallback(
 
     html = output.read_text(encoding="utf-8")
     assert 'class="chart-scroll" id="chartScroll"' in html
-    assert ".chart-wrap.is-3d .chart-scroll" in html
-    assert "min-width: 720px;" in html
+    assert ".chart-wrap.is-3d #chart" in html
+    assert "touch-action: none;" in html
+    assert 'trackChartListener(canvas, "touchmove"' in html
+    assert "pinchDistance" in html
     assert "function enterFullscreenFallback()" in html
     assert "section.requestFullscreen" in html
 
