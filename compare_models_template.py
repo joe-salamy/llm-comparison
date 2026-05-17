@@ -521,14 +521,8 @@ HTML_TEMPLATE = r"""<!doctype html>
         flex-wrap: wrap;
         margin-left: 0;
       }
-      .chart-wrap.is-3d .chart-scroll {
-        overflow-x: auto;
-        overflow-y: hidden;
-        overscroll-behavior-inline: contain;
-        -webkit-overflow-scrolling: touch;
-      }
-      .chart-wrap.is-3d:not(:fullscreen):not(.fullscreen-fallback) #chart {
-        min-width: 720px;
+      .chart-wrap.is-3d #chart {
+        touch-action: none;
       }
       .selection-actions { display: grid; grid-template-columns: 1fr 1fr; }
       .run-button,
@@ -1711,6 +1705,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       let dragging = false;
       let hover = null;
       let last = { x: 0, y: 0 };
+      let pinchDistance = 0;
       const hoverRadius = 18;
       const viewCube = document.getElementById("viewCube");
       const zoomIndicator = document.getElementById("zoomIndicator");
@@ -1963,6 +1958,27 @@ HTML_TEMPLATE = r"""<!doctype html>
       }
 
       const canvas = document.getElementById("chart");
+      function rotateFromPoint(point) {
+        rotationY -= (point.x - last.x) * 0.01;
+        rotationX += (point.y - last.y) * 0.01;
+        rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotationX));
+        last = point;
+        hover = null;
+        tooltip.style.display = "none";
+        render();
+      }
+
+      function touchPoint(touch) {
+        return { x: touch.clientX, y: touch.clientY };
+      }
+
+      function touchDistance(touches) {
+        return Math.hypot(
+          touches[0].clientX - touches[1].clientX,
+          touches[0].clientY - touches[1].clientY,
+        );
+      }
+
       trackChartListener(canvas, "mousedown", event => {
         dragging = true;
         last = { x: event.clientX, y: event.clientY };
@@ -1973,14 +1989,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       });
       trackChartListener(window, "mousemove", event => {
         if (dragging) {
-          rotationY -= (event.clientX - last.x) * 0.01;
-          rotationX += (event.clientY - last.y) * 0.01;
-          rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotationX));
-          last = { x: event.clientX, y: event.clientY };
-          hover = null;
-          tooltip.style.display = "none";
+          rotateFromPoint({ x: event.clientX, y: event.clientY });
           canvas.style.cursor = "grabbing";
-          render();
           return;
         }
         const rect = canvas.getBoundingClientRect();
@@ -2026,6 +2036,44 @@ HTML_TEMPLATE = r"""<!doctype html>
         zoom = Math.max(0.55, Math.min(8, zoom));
         render();
       }, { passive: false });
+      trackChartListener(canvas, "touchstart", event => {
+        if (event.touches.length === 1) {
+          dragging = true;
+          last = touchPoint(event.touches[0]);
+        } else if (event.touches.length === 2) {
+          dragging = false;
+          pinchDistance = touchDistance(event.touches);
+        }
+      }, { passive: false });
+      trackChartListener(canvas, "touchmove", event => {
+        if (event.touches.length === 1 && dragging) {
+          event.preventDefault();
+          rotateFromPoint(touchPoint(event.touches[0]));
+        } else if (event.touches.length === 2) {
+          event.preventDefault();
+          const nextDistance = touchDistance(event.touches);
+          if (pinchDistance > 0) {
+            zoom *= nextDistance / pinchDistance;
+            zoom = Math.max(0.55, Math.min(8, zoom));
+            render();
+          }
+          pinchDistance = nextDistance;
+        }
+      }, { passive: false });
+      trackChartListener(canvas, "touchend", event => {
+        if (!event.touches.length) {
+          dragging = false;
+          pinchDistance = 0;
+        } else if (event.touches.length === 1) {
+          dragging = true;
+          last = touchPoint(event.touches[0]);
+          pinchDistance = 0;
+        }
+      });
+      trackChartListener(canvas, "touchcancel", () => {
+        dragging = false;
+        pinchDistance = 0;
+      });
       trackChartListener(document.getElementById("resetCamera"), "click", () => {
         setCamera(initialCamera);
       });
