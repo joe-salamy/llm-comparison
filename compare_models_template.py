@@ -6,6 +6,22 @@ HTML_TEMPLATE = r"""<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>LLM Comparison</title>
+  <script>
+    (() => {
+      const storageKey = "llmComparison.theme";
+      const stored = (() => {
+        try {
+          return window.localStorage.getItem(storageKey);
+        } catch {
+          return null;
+        }
+      })();
+      const systemDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+      const theme = stored === "light" || stored === "dark" ? stored : systemDark ? "dark" : "light";
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+    })();
+  </script>
   <style>
     :root {
       --bg: #f6f7f4;
@@ -13,9 +29,97 @@ HTML_TEMPLATE = r"""<!doctype html>
       --muted: #5d655f;
       --line: #d5d9d2;
       --panel: #ffffff;
+      --panel-soft: #fbfcfa;
+      --panel-accent: #f3faf5;
+      --heading: #242824;
+      --control-ink: #303630;
+      --button-bg: #f7f8f5;
+      --button-hover: #eef0ec;
+      --accent: #1e5637;
+      --accent-hover: #17472d;
+      --accent-soft: #e8f3ec;
+      --accent-line: #9ab7a6;
+      --metric-card-line: #b8c1b8;
+      --link: #1f5d8f;
+      --chart-bg: #fbfcfa;
+      --chart-text: #4f5851;
+      --chart-title: #2f3831;
+      --chart-axis: #9ea79f;
+      --chart-axis-strong: #747d75;
+      --chart-grid-minor: rgba(207, 212, 204, 0.38);
+      --chart-grid-major: rgba(164, 172, 164, 0.68);
+      --chart-grid-3d-minor: rgba(207, 212, 204, 0.30);
+      --chart-grid-3d-major: rgba(164, 172, 164, 0.60);
+      --chart-label-halo: rgba(246, 247, 244, 0.92);
+      --chart-hover-ring: #1c1f1d;
+      --chart-optimal-label: #12351f;
+      --chart-suboptimal-label: #7a1717;
+      --trend: #8a5a00;
+      --overlay-border: rgba(116, 125, 117, 0.42);
+      --overlay-bg: rgba(247, 248, 245, 0.92);
+      --shadow: rgba(28, 31, 29, 0.12);
+      --table-head: #eef0ec;
+      --table-row-border: rgba(0, 0, 0, 0.08);
+      --table-hover-wash: rgba(255, 255, 255, 0.18);
+      --tooltip-bg: rgba(28, 31, 29, 0.94);
+      --tooltip-ink: #ffffff;
+      --row-low: 118 29 29;
+      --row-mid: 255 255 255;
+      --row-high: 11 93 42;
+      --row-text-dark: #151815;
+      --row-text-light: #ffffff;
       --green: #00a854;
       --red: #e03131;
       --blue: #275c8f;
+    }
+    html[data-theme="dark"] {
+      --bg: #111412;
+      --ink: #eef3ee;
+      --muted: #a9b4ac;
+      --line: #354039;
+      --panel: #181d1a;
+      --panel-soft: #141916;
+      --panel-accent: #17251d;
+      --heading: #f3f7f3;
+      --control-ink: #dce6df;
+      --button-bg: #202720;
+      --button-hover: #2a332c;
+      --accent: #35b972;
+      --accent-hover: #48c983;
+      --accent-soft: #1d3426;
+      --accent-line: #3d7754;
+      --metric-card-line: #4d5b51;
+      --link: #8cc7ff;
+      --chart-bg: #111613;
+      --chart-text: #b7c3ba;
+      --chart-title: #eef3ee;
+      --chart-axis: #78877d;
+      --chart-axis-strong: #94a49a;
+      --chart-grid-minor: rgba(105, 120, 110, 0.24);
+      --chart-grid-major: rgba(139, 154, 143, 0.46);
+      --chart-grid-3d-minor: rgba(105, 120, 110, 0.20);
+      --chart-grid-3d-major: rgba(139, 154, 143, 0.40);
+      --chart-label-halo: rgba(17, 20, 18, 0.92);
+      --chart-hover-ring: #f4f8f4;
+      --chart-optimal-label: #93e5b3;
+      --chart-suboptimal-label: #ffabab;
+      --trend: #d6a64a;
+      --overlay-border: rgba(130, 150, 137, 0.45);
+      --overlay-bg: rgba(28, 34, 30, 0.92);
+      --shadow: rgba(0, 0, 0, 0.34);
+      --table-head: #202820;
+      --table-row-border: rgba(255, 255, 255, 0.08);
+      --table-hover-wash: rgba(255, 255, 255, 0.08);
+      --tooltip-bg: rgba(238, 243, 238, 0.96);
+      --tooltip-ink: #111412;
+      --row-low: 92 22 28;
+      --row-mid: 37 43 39;
+      --row-high: 13 96 55;
+      --row-text-dark: #f4f8f4;
+      --row-text-light: #ffffff;
+      --green: #29c776;
+      --red: #ff5c66;
+      --blue: #74a7dc;
     }
     * { box-sizing: border-box; }
     body {
@@ -63,9 +167,27 @@ HTML_TEMPLATE = r"""<!doctype html>
     .controls-header,
     .info-title {
       margin: 0 0 10px;
-      color: #242824;
+      color: var(--heading);
       font-size: 15px;
       font-weight: 720;
+    }
+    .theme-toggle {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--button-bg);
+      color: var(--ink);
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 720;
+      padding: 0 10px;
+      white-space: nowrap;
+    }
+    .theme-toggle:hover,
+    .theme-toggle:focus-visible {
+      background: var(--button-hover);
+      outline: none;
     }
     .metric-picker {
       display: flex;
@@ -81,28 +203,28 @@ HTML_TEMPLATE = r"""<!doctype html>
     .metric-group {
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #fbfcfa;
+      background: var(--panel-soft);
       padding: 11px;
     }
     .metric-group.core {
-      border-color: #9ab7a6;
-      background: #f3faf5;
+      border-color: var(--accent-line);
+      background: var(--panel-accent);
     }
     .metric-group-title {
       margin: 0 0 8px;
-      color: #303630;
+      color: var(--control-ink);
       font-size: 12px;
       font-weight: 760;
       text-transform: uppercase;
     }
     .metric-group.core .metric-group-title {
-      color: #1e5637;
+      color: var(--accent);
     }
     .metric-button {
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #f7f8f5;
-      color: #242824;
+      background: var(--button-bg);
+      color: var(--heading);
       cursor: pointer;
       font: inherit;
       font-size: 12px;
@@ -111,7 +233,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
     .metric-button:hover,
     .metric-button:focus-visible {
-      background: #eef0ec;
+      background: var(--button-hover);
       outline: none;
     }
     .metric-button[disabled] {
@@ -119,14 +241,14 @@ HTML_TEMPLATE = r"""<!doctype html>
       opacity: 0.45;
     }
     .metric-group.core .metric-button {
-      border-color: #9ab7a6;
-      background: #ffffff;
+      border-color: var(--accent-line);
+      background: var(--panel);
       font-size: 13px;
       padding: 8px 10px;
     }
     .metric-group.core .metric-button:hover,
     .metric-group.core .metric-button:focus-visible {
-      background: #e8f3ec;
+      background: var(--accent-soft);
     }
     .selected-line {
       display: grid;
@@ -143,7 +265,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       padding: 7px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #fbfcfa;
+      background: var(--panel-soft);
     }
     .selected-empty {
       color: var(--muted);
@@ -155,10 +277,10 @@ HTML_TEMPLATE = r"""<!doctype html>
       align-items: center;
       gap: 7px;
       max-width: 100%;
-      border: 1px solid #b8c1b8;
+      border: 1px solid var(--metric-card-line);
       border-radius: 6px;
-      background: #ffffff;
-      color: #242824;
+      background: var(--panel);
+      color: var(--heading);
       font-size: 12px;
       font-weight: 650;
       padding: 5px 7px;
@@ -174,8 +296,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       place-items: center;
       border: 0;
       border-radius: 4px;
-      background: #eef0ec;
-      color: #242824;
+      background: var(--button-hover);
+      color: var(--heading);
       cursor: pointer;
       font: inherit;
       font-size: 14px;
@@ -184,9 +306,9 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
     .run-button {
       min-height: 42px;
-      border: 1px solid #1e5637;
+      border: 1px solid var(--accent);
       border-radius: 6px;
-      background: #1e5637;
+      background: var(--accent);
       color: #ffffff;
       cursor: pointer;
       font: inherit;
@@ -203,8 +325,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       min-height: 42px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #f7f8f5;
-      color: #303630;
+      background: var(--button-bg);
+      color: var(--control-ink);
       cursor: pointer;
       font: inherit;
       font-size: 13px;
@@ -214,12 +336,12 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
     .run-button:hover,
     .run-button:focus-visible {
-      background: #17472d;
+      background: var(--accent-hover);
       outline: none;
     }
     .clear-button:hover,
     .clear-button:focus-visible {
-      background: #eef0ec;
+      background: var(--button-hover);
       outline: none;
     }
     .control-note {
@@ -228,7 +350,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       font-size: 12px;
     }
     .info-wrap {
-      color: #303630;
+      color: var(--control-ink);
     }
     .info-grid {
       display: grid;
@@ -246,7 +368,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       margin-top: 4px;
     }
     .info-wrap a {
-      color: #1f5d8f;
+      color: var(--link);
       font-weight: 650;
     }
     .chart-wrap {
@@ -274,7 +396,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     .chart-button {
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #f7f8f5;
+      background: var(--button-bg);
       color: var(--ink);
       cursor: pointer;
       font: inherit;
@@ -283,7 +405,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       padding: 5px 9px;
     }
     .chart-button:hover {
-      background: #eef0ec;
+      background: var(--button-hover);
     }
     .chart-canvas-wrap {
       position: relative;
@@ -349,10 +471,10 @@ HTML_TEMPLATE = r"""<!doctype html>
       grid-template-rows: repeat(3, 34px);
       gap: 3px;
       padding: 6px;
-      border: 1px solid rgba(116, 125, 117, 0.42);
+      border: 1px solid var(--overlay-border);
       border-radius: 7px;
-      background: rgba(247, 248, 245, 0.90);
-      box-shadow: 0 10px 28px rgba(28, 31, 29, 0.12);
+      background: var(--overlay-bg);
+      box-shadow: 0 10px 28px var(--shadow);
       -webkit-backdrop-filter: blur(8px);
       backdrop-filter: blur(8px);
     }
@@ -366,11 +488,11 @@ HTML_TEMPLATE = r"""<!doctype html>
       z-index: 3;
       min-width: 58px;
       padding: 5px 8px;
-      border: 1px solid rgba(116, 125, 117, 0.42);
+      border: 1px solid var(--overlay-border);
       border-radius: 6px;
-      background: rgba(247, 248, 245, 0.92);
-      box-shadow: 0 10px 28px rgba(28, 31, 29, 0.10);
-      color: #2f3831;
+      background: var(--overlay-bg);
+      box-shadow: 0 10px 28px var(--shadow);
+      color: var(--chart-title);
       font-size: 11px;
       font-weight: 720;
       line-height: 1;
@@ -383,10 +505,10 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
     .view-cube button {
       min-width: 0;
-      border: 1px solid rgba(116, 125, 117, 0.42);
+      border: 1px solid var(--overlay-border);
       border-radius: 5px;
-      background: #ffffff;
-      color: #2f3831;
+      background: var(--panel);
+      color: var(--chart-title);
       cursor: pointer;
       font: inherit;
       font-size: 10px;
@@ -396,19 +518,19 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
     .view-cube button:hover,
     .view-cube button:focus-visible {
-      background: #eef0ec;
-      border-color: #747d75;
+      background: var(--button-hover);
+      border-color: var(--chart-axis-strong);
       outline: none;
     }
     .view-cube button.active {
-      background: #2f3831;
-      color: #ffffff;
-      border-color: #2f3831;
+      background: var(--chart-title);
+      color: var(--bg);
+      border-color: var(--chart-title);
     }
     .view-cube button.active:hover,
     .view-cube button.active:focus-visible {
-      background: #445047;
-      border-color: #445047;
+      background: var(--control-ink);
+      border-color: var(--control-ink);
     }
     .legend {
       display: flex;
@@ -435,7 +557,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       width: 22px;
       height: 0;
       display: inline-block;
-      border-top: 3px solid #8a5a00;
+      border-top: 3px solid var(--trend);
     }
     #chart {
       width: 100%;
@@ -443,7 +565,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       display: block;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: #fbfcfa;
+      background: var(--chart-bg);
     }
     .table-wrap {
       overflow: auto;
@@ -460,7 +582,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
     th, td {
       padding: 9px 11px;
-      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      border-bottom: 1px solid var(--table-row-border);
       text-align: left;
       vertical-align: middle;
       white-space: nowrap;
@@ -469,8 +591,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       position: sticky;
       top: 0;
       z-index: 2;
-      background: #eef0ec;
-      color: #242824;
+      background: var(--table-head);
+      color: var(--heading);
       font-size: 12px;
       font-weight: 720;
       cursor: pointer;
@@ -485,14 +607,14 @@ HTML_TEMPLATE = r"""<!doctype html>
       color: var(--muted);
     }
     tbody tr:hover td {
-      box-shadow: inset 0 0 0 9999px rgba(255, 255, 255, 0.18);
+      box-shadow: inset 0 0 0 9999px var(--table-hover-wash);
     }
     .tooltip {
       position: fixed;
       pointer-events: none;
       transform: translate(12px, 12px);
-      background: rgba(28, 31, 29, 0.94);
-      color: #fff;
+      background: var(--tooltip-bg);
+      color: var(--tooltip-ink);
       padding: 8px 10px;
       border-radius: 6px;
       font-size: 12px;
@@ -542,6 +664,7 @@ HTML_TEMPLATE = r"""<!doctype html>
           <div class="meta" id="summary"></div>
         </div>
       </div>
+      <button class="theme-toggle" id="themeToggle" type="button" aria-label="Toggle dark mode"></button>
     </header>
     <section class="controls-wrap" aria-labelledby="controlsTitle">
       <h2 class="controls-header" id="controlsTitle">Choose scoring metrics</h2>
@@ -685,6 +808,64 @@ HTML_TEMPLATE = r"""<!doctype html>
     let medianScore = 50;
     let chartDisposers = [];
     let chartRender = null;
+    const themeStorageKey = "llmComparison.theme";
+    const themeMediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
+
+    function readStoredTheme() {
+      try {
+        const stored = window.localStorage.getItem(themeStorageKey);
+        return stored === "light" || stored === "dark" ? stored : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function writeStoredTheme(theme) {
+      try {
+        window.localStorage.setItem(themeStorageKey, theme);
+      } catch {
+        // Theme selection still works for the current page when storage is unavailable.
+      }
+    }
+
+    function preferredSystemTheme() {
+      return themeMediaQuery?.matches ? "dark" : "light";
+    }
+
+    function activeTheme() {
+      return readStoredTheme() || preferredSystemTheme();
+    }
+
+    function updateThemeToggle() {
+      const button = document.getElementById("themeToggle");
+      if (!button) return;
+      const theme = document.documentElement.dataset.theme || activeTheme();
+      const nextTheme = theme === "dark" ? "light" : "dark";
+      button.textContent = theme === "dark" ? "Dark" : "Light";
+      button.title = `Switch to ${nextTheme} mode`;
+      button.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+      updateThemeToggle();
+      if (chartRender) chartRender();
+    }
+
+    function toggleTheme() {
+      const nextTheme = (document.documentElement.dataset.theme || activeTheme()) === "dark" ? "light" : "dark";
+      writeStoredTheme(nextTheme);
+      applyTheme(nextTheme);
+    }
+
+    function cssColor(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function cssRgb(name) {
+      return cssColor(name).split(/\s+/).map(Number);
+    }
 
     function isLowerBetter(key) {
       return lowerIsBetterMarkers.some(marker => key.includes(marker));
@@ -1088,10 +1269,10 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
 
     function rowColor(score) {
-      if (Math.abs(maxScore - minScore) < 0.0001) return "rgb(255,255,255)";
-      const red = [118, 29, 29];
-      const white = [255, 255, 255];
-      const green = [11, 93, 42];
+      if (Math.abs(maxScore - minScore) < 0.0001) return `rgb(${cssRgb("--row-mid").join(",")})`;
+      const red = cssRgb("--row-low");
+      const white = cssRgb("--row-mid");
+      const green = cssRgb("--row-high");
       const lowSpan = Math.max(0.0001, medianScore - minScore);
       const highSpan = Math.max(0.0001, maxScore - medianScore);
       const t = score <= medianScore
@@ -1110,7 +1291,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     function textColor(score) {
       const color = rowColor(score).match(/\d+/g).map(Number);
       const luminance = (0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2]) / 255;
-      return luminance < 0.48 ? "#fff" : "#151815";
+      return luminance < 0.48 ? cssColor("--row-text-light") : cssColor("--row-text-dark");
     }
 
     function compareValues(a, b, numeric) {
@@ -1167,9 +1348,9 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
 
     function pointColor(row) {
-      if (row.pareto.optimal) return "#00a854";
-      if (row.pareto.suboptimal) return "#e03131";
-      return "#275c8f";
+      if (row.pareto.optimal) return cssColor("--green");
+      if (row.pareto.suboptimal) return cssColor("--red");
+      return cssColor("--blue");
     }
 
     function chartSection() {
@@ -1378,7 +1559,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         ctx.save();
         ctx.lineJoin = "round";
         ctx.lineWidth = options.haloWidth ?? 2;
-        ctx.strokeStyle = options.haloColor ?? "rgba(246, 247, 244, 0.92)";
+        ctx.strokeStyle = options.haloColor ?? cssColor("--chart-label-halo");
         ctx.strokeText(text, label.x, label.y, label.maxWidth);
         ctx.restore();
       }
@@ -1526,9 +1707,9 @@ HTML_TEMPLATE = r"""<!doctype html>
         const minorTickCount = 20;
         const majorTickEvery = 4;
 
-        ctx.fillStyle = "#4f5851";
+        ctx.fillStyle = cssColor("--chart-text");
 
-        ctx.strokeStyle = "rgba(207, 212, 204, 0.38)";
+        ctx.strokeStyle = cssColor("--chart-grid-minor");
         ctx.lineWidth = 0.75;
         for (let index = 0; index <= minorTickCount; index += 1) {
           if (index % majorTickEvery === 0) continue;
@@ -1543,7 +1724,7 @@ HTML_TEMPLATE = r"""<!doctype html>
           ctx.stroke();
         }
 
-        ctx.strokeStyle = "rgba(164, 172, 164, 0.68)";
+        ctx.strokeStyle = cssColor("--chart-grid-major");
         ctx.lineWidth = 1;
         for (let index = 0; index <= minorTickCount; index += majorTickEvery) {
           const ratio = index / minorTickCount;
@@ -1565,14 +1746,14 @@ HTML_TEMPLATE = r"""<!doctype html>
           ctx.textAlign = "left";
         }
 
-        ctx.strokeStyle = "#9ea79f";
+        ctx.strokeStyle = cssColor("--chart-axis");
         ctx.lineWidth = 2.25;
         ctx.beginPath();
         ctx.moveTo(plotLeft, plotTop);
         ctx.lineTo(plotLeft, plotBottom);
         ctx.lineTo(plotRight, plotBottom);
         ctx.stroke();
-        ctx.fillStyle = "#2f3831";
+        ctx.fillStyle = cssColor("--chart-title");
         ctx.font = "700 16px sans-serif";
         drawFixedContainedLabel(
           ctx,
@@ -1596,7 +1777,7 @@ HTML_TEMPLATE = r"""<!doctype html>
           ctx.beginPath();
           ctx.rect(plotLeft, plotTop, plotWidth, plotHeight);
           ctx.clip();
-          ctx.strokeStyle = "#8a5a00";
+          ctx.strokeStyle = cssColor("--trend");
           ctx.lineWidth = 3;
           ctx.setLineDash([8, 5]);
           ctx.beginPath();
@@ -1622,7 +1803,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         }
         if (hover) {
           ctx.save();
-          ctx.strokeStyle = "#1c1f1d";
+          ctx.strokeStyle = cssColor("--chart-hover-ring");
           ctx.lineWidth = 2.5;
           ctx.beginPath();
           ctx.arc(hover.x, hover.y, hover.row.pareto.optimal ? 8.5 : 7, 0, Math.PI * 2);
@@ -1631,7 +1812,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         }
         for (const point of projected) {
           if (point.row.pareto.optimal || point.row.pareto.suboptimal) {
-            ctx.fillStyle = point.row.pareto.suboptimal ? "#7a1717" : "#12351f";
+            ctx.fillStyle = point.row.pareto.suboptimal ? cssColor("--chart-suboptimal-label") : cssColor("--chart-optimal-label");
             ctx.font = "700 12px sans-serif";
             drawLaidOutLabel(
               ctx,
@@ -1822,7 +2003,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         const endpoints = clippedTrendEndpoints();
         if (!endpoints) return;
         ctx.save();
-        ctx.strokeStyle = "#8a5a00";
+        ctx.strokeStyle = cssColor("--trend");
         ctx.lineWidth = 3;
         ctx.globalAlpha = 0.82;
         ctx.setLineDash([8, 5]);
@@ -1835,14 +2016,14 @@ HTML_TEMPLATE = r"""<!doctype html>
         updateViewCubeActiveState();
         updateZoomIndicator();
         ctx.clearRect(0, 0, width, height);
-        ctx.fillStyle = "#4f5851";
+        ctx.fillStyle = cssColor("--chart-text");
         ctx.font = "12px sans-serif";
         ctx.lineWidth = 1;
 
         const minorTickCount = 16;
         const majorTickEvery = 4;
 
-        ctx.strokeStyle = "rgba(207, 212, 204, 0.30)";
+        ctx.strokeStyle = cssColor("--chart-grid-3d-minor");
         ctx.lineWidth = 0.75;
         for (let index = 0; index <= minorTickCount; index += 1) {
           if (index % majorTickEvery === 0) continue;
@@ -1855,7 +2036,7 @@ HTML_TEMPLATE = r"""<!doctype html>
           drawSegment(ctx, { x: -1.05, y: -1.05, z: value }, { x: -1.05, y: 1.05, z: value }, width, height);
         }
 
-        ctx.strokeStyle = "rgba(164, 172, 164, 0.60)";
+        ctx.strokeStyle = cssColor("--chart-grid-3d-major");
         ctx.lineWidth = 1;
         for (let index = 0; index <= minorTickCount; index += majorTickEvery) {
           const value = -1.05 + (index / minorTickCount) * 2.1;
@@ -1873,9 +2054,9 @@ HTML_TEMPLATE = r"""<!doctype html>
           { end: { x: -1.05, y: -1.05, z: 1.25 }, label: categories[2], tickOffset: { x: 8, y: -8 } },
         ];
         const origin = projectPoint({ x: -1.05, y: -1.05, z: -1.05 }, width, height);
-        ctx.strokeStyle = "#747d75";
+        ctx.strokeStyle = cssColor("--chart-axis-strong");
         ctx.lineWidth = 2.6;
-        ctx.fillStyle = "#2f3831";
+        ctx.fillStyle = cssColor("--chart-title");
         ctx.font = "700 16px sans-serif";
         for (const [axisIndex, axis] of axes.entries()) {
           const end = projectPoint(axis.end, width, height);
@@ -1892,7 +2073,7 @@ HTML_TEMPLATE = r"""<!doctype html>
           );
 
           ctx.font = "11px sans-serif";
-          ctx.fillStyle = "#4f5851";
+          ctx.fillStyle = cssColor("--chart-text");
           for (let index = 0; index <= minorTickCount; index += majorTickEvery) {
             const ratio = index / minorTickCount;
             const normalizedValue = -1 + ratio * 2;
@@ -1907,7 +2088,7 @@ HTML_TEMPLATE = r"""<!doctype html>
             );
           }
           ctx.font = "700 16px sans-serif";
-          ctx.fillStyle = "#2f3831";
+          ctx.fillStyle = cssColor("--chart-title");
         }
 
         drawTrendLine(ctx, width, height);
@@ -1932,7 +2113,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         }
         if (hover) {
           ctx.save();
-          ctx.strokeStyle = "#1c1f1d";
+          ctx.strokeStyle = cssColor("--chart-hover-ring");
           ctx.lineWidth = 2.5;
           ctx.beginPath();
           ctx.arc(hover.x, hover.y, hover.row.pareto.optimal ? 9 : 7.5, 0, Math.PI * 2);
@@ -1942,7 +2123,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         const occupiedLabels = [];
         for (const point of projected) {
           if (!point.row.pareto.optimal && !point.row.pareto.suboptimal) continue;
-          ctx.fillStyle = point.row.pareto.suboptimal ? "#7a1717" : "#12351f";
+          ctx.fillStyle = point.row.pareto.suboptimal ? cssColor("--chart-suboptimal-label") : cssColor("--chart-optimal-label");
           ctx.font = "700 12px sans-serif";
           drawLaidOutLabel(
             ctx,
@@ -2110,6 +2291,10 @@ HTML_TEMPLATE = r"""<!doctype html>
 
     document.getElementById("runComparison").addEventListener("click", () => applySelection({ syncUrl: true }));
     document.getElementById("clearMetrics").addEventListener("click", clearMetrics);
+    document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+    themeMediaQuery?.addEventListener("change", () => {
+      if (!readStoredTheme()) applyTheme(preferredSystemTheme());
+    });
     document.getElementById("fullscreenChart").addEventListener("click", async () => {
       const section = chartSection();
       if (section.classList.contains("fullscreen-fallback")) {
@@ -2139,6 +2324,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         exitFullscreenFallback();
       }
     });
+    applyTheme(activeTheme());
     applyUrlMetrics();
     renderMetricPicker();
     renderSelectedMetrics();
