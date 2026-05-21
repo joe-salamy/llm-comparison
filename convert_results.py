@@ -3,10 +3,13 @@ from __future__ import annotations
 import argparse
 import csv
 import re
+from datetime import date
 from pathlib import Path
 
 DEFAULT_INPUT = Path("input.txt")
 DEFAULT_CSV = Path("results.csv")
+DEFAULT_HTML = Path("index.html")
+DEFAULT_TEMPLATE = Path("compare_models_template.py")
 
 DISPLAY_HEADERS = [
     "Model",
@@ -176,17 +179,61 @@ def write_csv(rows: list[list[str]], path: Path) -> None:
             )
 
 
+def format_display_date(uploaded_date: date) -> str:
+    return f"{uploaded_date.strftime('%B')} {uploaded_date.day}, {uploaded_date.year}"
+
+
+def update_upload_dates(paths: list[Path], uploaded_date: date) -> int:
+    display_date = format_display_date(uploaded_date)
+    replacements = (
+        (
+            re.compile(r"Data updated: [A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}"),
+            f"Data updated: {display_date}",
+        ),
+        (
+            re.compile(r'const dataUpdated = "[A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}"'),
+            f'const dataUpdated = "{display_date}"',
+        ),
+    )
+
+    updated_files = 0
+    for path in paths:
+        if not path.exists():
+            continue
+
+        original = path.read_text(encoding="utf-8")
+        updated = original
+        for pattern, replacement in replacements:
+            updated = pattern.sub(replacement, updated)
+
+        if updated != original:
+            path.write_text(updated, encoding="utf-8", newline="\n")
+            updated_files += 1
+
+    return updated_files
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Convert copied Artificial Analysis leaderboard data into CSV."
     )
     parser.add_argument("--input", default=DEFAULT_INPUT, type=Path)
     parser.add_argument("--csv", default=DEFAULT_CSV, type=Path)
+    parser.add_argument("--html", default=DEFAULT_HTML, type=Path)
+    parser.add_argument("--template", default=DEFAULT_TEMPLATE, type=Path)
+    parser.add_argument(
+        "--uploaded-date",
+        default=date.today(),
+        type=date.fromisoformat,
+        help="Data upload date in YYYY-MM-DD format. Defaults to today.",
+    )
     args = parser.parse_args()
 
     rows = parse_input(args.input)
     write_csv(rows, args.csv)
+    updated_files = update_upload_dates([args.template, args.html], args.uploaded_date)
     print(f"Wrote {len(rows)} rows to {args.csv}")
+    print(f"Updated upload date in {updated_files} files")
 
 
 if __name__ == "__main__":
