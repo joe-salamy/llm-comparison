@@ -245,6 +245,38 @@ def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:
     assert "applySelection({ syncUrl: true })" in html
 
 
+def test_report_supports_persisted_theme_preference(tmp_path: Path) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "one",
+            "quality": "1",
+            "_raw_values": {"quality": 1.0},
+            FINAL_SCORE: 100.0,
+        }
+    ]
+
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality"],
+        [{"optimal": True, "suboptimal": False}],
+    )
+
+    html = output.read_text(encoding="utf-8")
+    assert 'id="themeToggle"' in html
+    assert "llmComparison.theme" in html
+    assert "window.localStorage.getItem(themeStorageKey)" in html
+    assert "window.localStorage.setItem(themeStorageKey, theme)" in html
+    assert "prefers-color-scheme: dark" in html
+    assert 'html[data-theme="dark"]' in html
+    assert (
+        'document.getElementById("themeToggle").addEventListener("click", toggleTheme)'
+        in html
+    )
+
+
 def test_context_window_is_not_a_core_metric(tmp_path: Path) -> None:
     output = tmp_path / "report.html"
     rows = [
