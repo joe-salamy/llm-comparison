@@ -321,18 +321,33 @@ HTML_TEMPLATE = r"""<!doctype html>
       display: flex;
       gap: 8px;
     }
-    .clear-button {
-      min-height: 42px;
+    .filter-line {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 10px;
+    }
+    .filter-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 9px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      background: var(--button-bg);
+      background: var(--panel-soft);
       color: var(--control-ink);
       cursor: pointer;
       font: inherit;
-      font-size: 13px;
-      font-weight: 720;
-      padding: 0 12px;
-      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .filter-option input[type="checkbox"] {
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .clear-button {
     }
     .run-button:hover,
     .run-button:focus-visible {
@@ -649,6 +664,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       .selection-actions { display: grid; grid-template-columns: 1fr 1fr; }
       .run-button,
       .clear-button { width: 100%; }
+      .filter-line { justify-content: stretch; }
+      .filter-option { width: 100%; }
       #chart { height: 440px; }
       th, td { padding: 8px; }
     }
@@ -684,6 +701,12 @@ HTML_TEMPLATE = r"""<!doctype html>
           <button class="clear-button" id="clearMetrics" type="button">Clear all</button>
           <button class="run-button" id="runComparison" type="button">Run comparison</button>
         </div>
+      </div>
+      <div class="filter-line">
+        <label class="filter-option">
+          <input type="checkbox" id="excludeZeroPrice">
+          <span>Exclude free / promo models (price = 0)</span>
+        </label>
       </div>
       <div class="control-note" id="controlNote"></div>
     </section>
@@ -769,26 +792,14 @@ HTML_TEMPLATE = r"""<!doctype html>
       p25_tokens_per_second: "P25 (Tokens/s)",
       p75_tokens_per_second: "P75 (Tokens/s)",
       p95_tokens_per_second: "P95 (Tokens/s)",
-      first_chunk_latency_seconds: "First Chunk Latency (s)",
-      first_answer_latency_seconds: "First Answer Latency (s)",
-      p5_first_chunk_latency_seconds: "P5 First Chunk Latency (s)",
-      p25_first_chunk_latency_seconds: "P25 First Chunk Latency (s)",
       p75_first_chunk_latency_seconds: "P75 First Chunk Latency (s)",
-      p95_first_chunk_latency_seconds: "P95 First Chunk Latency (s)",
-      total_response_time_seconds: "Total Response Time (s)",
-      reasoning_time_seconds: "Reasoning Time (s)",
     };
-    const mainColumnKeys = [
-      "model",
-      "context_window_tokens",
-      "creator",
-      "artificial_analysis_intelligence_index",
-      "blended_usd_per_1m_tokens",
-      "median_tokens_per_second",
-      "first_chunk_latency_seconds",
-      "total_response_time_seconds",
-      "final_score",
-    ];
+    const embeddedRows = payload.rows.slice();
+    let sourceRows = [];
+    let availableCategories = (payload.availableCategories || payload.categories).slice();
+    let selectedCategories = payload.categories.map(category => category.key);
+    let excludeZeroPrice = false;
+    let rows = payload.rows.slice();
     const lowerIsBetterMarkers = ["price", "usd", "latency", "time"];
     const coreCategoryKeys = [
       "artificial_analysis_intelligence_index",
@@ -797,11 +808,6 @@ HTML_TEMPLATE = r"""<!doctype html>
       "first_chunk_latency_seconds",
       "total_response_time_seconds",
     ];
-    const embeddedRows = payload.rows.slice();
-    let sourceRows = [];
-    let availableCategories = (payload.availableCategories || payload.categories).slice();
-    let selectedCategories = payload.categories.map(category => category.key);
-    let rows = payload.rows.slice();
     let sortState = { key: "final_score", direction: "desc" };
     let minScore = 0;
     let maxScore = 100;
@@ -897,17 +903,30 @@ HTML_TEMPLATE = r"""<!doctype html>
       );
     }
 
-    function applyUrlMetrics() {
+    function applyUrlOptions() {
+      const params = new URLSearchParams(window.location.search);
       const metrics = metricKeysFromUrl();
       if (metrics.length) selectedCategories = metrics;
+      excludeZeroPrice = params.get("excludeZeroPrice") === "1";
+      syncExcludeZeroPriceCheckbox();
     }
 
-    function updateMetricsUrl() {
+    function syncExcludeZeroPriceCheckbox() {
+      const checkbox = document.getElementById("excludeZeroPrice");
+      if (checkbox) checkbox.checked = excludeZeroPrice;
+    }
+
+    function updateOptionsUrl() {
       const url = new URL(window.location.href);
       if (selectedCategories.length) {
         url.searchParams.set("metrics", selectedCategories.join(","));
       } else {
         url.searchParams.delete("metrics");
+      }
+      if (excludeZeroPrice) {
+        url.searchParams.set("excludeZeroPrice", "1");
+      } else {
+        url.searchParams.delete("excludeZeroPrice");
       }
       window.history.replaceState({}, "", url);
     }
@@ -1026,16 +1045,11 @@ HTML_TEMPLATE = r"""<!doctype html>
         return { optimal, suboptimal };
       });
     }
-
-    function tableColumns(headers, numericKeys) {
-      const keys = mainColumnKeys.filter(key => key === "final_score" || headers.includes(key));
-      return keys.map(key => ({ key, label: key === "final_score" ? "Final Score" : labelFor(key), numeric: key === "final_score" || numericKeys.has(key) }));
-    }
-
     function scoreSourceRows(categories) {
       const completeRows = [];
       const valuesByCategory = Object.fromEntries(categories.map(category => [category, []]));
       for (const raw of sourceRows) {
+        if (excludeZeroPrice && parseNumber(raw.blended_usd_per_1m_tokens) === 0) continue;
         const graph = {};
         let complete = true;
         for (const category of categories) {
@@ -1080,6 +1094,9 @@ HTML_TEMPLATE = r"""<!doctype html>
       const completeRows = [];
       const valuesByCategory = Object.fromEntries(categories.map(category => [category, []]));
       for (const original of embeddedRows) {
+        const priceCell = original.cells.blended_usd_per_1m_tokens;
+        const priceValue = priceCell?.sort ?? original.graph.blended_usd_per_1m_tokens;
+        if (excludeZeroPrice && priceValue === 0) continue;
         const graph = {};
         let complete = true;
         for (const category of categories) {
@@ -1128,8 +1145,9 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
 
     function updateSummary() {
+      const filterNote = excludeZeroPrice ? " (excluding free/promo models)" : "";
       document.getElementById("summary").textContent =
-        `${rows.length} models ranked by ${payload.categories.map(c => c.label).join(", ")}`;
+        `${rows.length} models ranked by ${payload.categories.map(c => c.label).join(", ")}${filterNote}`;
       document.getElementById("controlNote").textContent =
         "Selected metrics are evaluated in order; the first two or three also define the chart axes.";
     }
@@ -1174,8 +1192,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       renderMetricPicker();
       renderTable();
       resetChartCanvas();
-      drawGraph();
-      if (syncUrl) updateMetricsUrl();
+      if (syncUrl) updateOptionsUrl();
     }
 
     function renderSelectedMetrics() {
@@ -1260,7 +1277,7 @@ HTML_TEMPLATE = r"""<!doctype html>
           .filter(Boolean),
         ...discoveredCategories.filter(category => !coreCategoryKeys.includes(category.key)),
       ];
-      applyUrlMetrics();
+      applyUrlOptions();
       applySelection();
     }
 
@@ -2291,6 +2308,10 @@ HTML_TEMPLATE = r"""<!doctype html>
 
     document.getElementById("runComparison").addEventListener("click", () => applySelection({ syncUrl: true }));
     document.getElementById("clearMetrics").addEventListener("click", clearMetrics);
+    document.getElementById("excludeZeroPrice").addEventListener("change", (event) => {
+      excludeZeroPrice = event.target.checked;
+      applySelection({ syncUrl: true });
+    });
     document.getElementById("themeToggle").addEventListener("click", toggleTheme);
     themeMediaQuery?.addEventListener("change", () => {
       if (!readStoredTheme()) applyTheme(preferredSystemTheme());
@@ -2325,11 +2346,10 @@ HTML_TEMPLATE = r"""<!doctype html>
       }
     });
     applyTheme(activeTheme());
-    applyUrlMetrics();
+    applyUrlOptions();
     renderMetricPicker();
     renderSelectedMetrics();
     updateScoreScale();
-    updateSummary();
     renderTable();
     drawGraph();
 
