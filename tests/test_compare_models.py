@@ -3,6 +3,7 @@ from pathlib import Path
 from compare_models_core import (
     FINAL_SCORE,
     Column,
+    exclude_zero_price_rows,
     json_ready_rows,
     pareto_flags,
     score_rows,
@@ -304,3 +305,36 @@ def test_context_window_is_not_a_core_metric(tmp_path: Path) -> None:
     core_keys = html[core_keys_start:core_keys_end]
 
     assert '"context_window_tokens"' not in core_keys
+
+
+def test_exclude_zero_price_rows_removes_zero_price_models() -> None:
+    rows = [
+        {"model": "free", "blended_usd_per_1m_tokens": "0.00"},
+        {"model": "paid", "blended_usd_per_1m_tokens": "1.50"},
+        {"model": "empty", "blended_usd_per_1m_tokens": ""},
+    ]
+
+    filtered = exclude_zero_price_rows(rows)
+
+    assert [row["model"] for row in filtered] == ["paid", "empty"]
+
+
+def test_exclude_zero_price_changes_percentile_scores(tmp_path: Path) -> None:
+    rows = [
+        {"model": "free", "quality": "50", "blended_usd_per_1m_tokens": "0.00"},
+        {"model": "mid", "quality": "60", "blended_usd_per_1m_tokens": "1.00"},
+        {"model": "top", "quality": "100", "blended_usd_per_1m_tokens": "2.00"},
+    ]
+
+    scored_with_free = score_rows(rows, ["quality"])
+    scored_without_free = score_rows(exclude_zero_price_rows(rows), ["quality"])
+
+    with_free_scores = {
+        row["model"]: row[FINAL_SCORE] for row in scored_with_free
+    }
+    without_free_scores = {
+        row["model"]: row[FINAL_SCORE] for row in scored_without_free
+    }
+    assert "free" not in without_free_scores
+    assert with_free_scores["mid"] != without_free_scores["mid"]
+    assert without_free_scores["top"] == 100.0

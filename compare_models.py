@@ -7,6 +7,7 @@ from compare_models_core import (
     DEFAULT_INPUT,
     DEFAULT_OUTPUT,
     FINAL_SCORE,
+    exclude_zero_price_rows,
     list_categories,
     numeric_columns,
     pareto_flags,
@@ -41,6 +42,14 @@ def parse_args() -> argparse.Namespace:
         help="Include all CSV columns in the final table instead of the main columns.",
     )
     parser.add_argument(
+        "--exclude-zero-price",
+        action="store_true",
+        help=(
+            "Exclude models whose blended price is 0 (promo/free tiers) "
+            "from scoring and output."
+        ),
+    )
+    parser.add_argument(
         "--list-categories",
         action="store_true",
         help="List available numeric scoring categories and aliases, then exit.",
@@ -59,6 +68,8 @@ def main() -> None:
     if not args.categories:
         raise SystemExit("At least one scoring category is required.")
 
+    if args.exclude_zero_price:
+        rows = exclude_zero_price_rows(rows)
     numeric = numeric_columns(headers, rows)
     categories = [resolve_category(category, headers) for category in args.categories]
     invalid = [category for category in categories if category not in numeric]
