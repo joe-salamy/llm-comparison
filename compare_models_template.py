@@ -348,6 +348,17 @@ HTML_TEMPLATE = r"""<!doctype html>
       cursor: pointer;
     }
     .clear-button {
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--button-bg);
+      color: var(--control-ink);
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 720;
+      padding: 0 12px;
+      white-space: nowrap;
     }
     .run-button:hover,
     .run-button:focus-visible {
@@ -792,7 +803,14 @@ HTML_TEMPLATE = r"""<!doctype html>
       p25_tokens_per_second: "P25 (Tokens/s)",
       p75_tokens_per_second: "P75 (Tokens/s)",
       p95_tokens_per_second: "P95 (Tokens/s)",
+      first_chunk_latency_seconds: "First Chunk Latency (s)",
+      first_answer_latency_seconds: "First Answer Latency (s)",
+      p5_first_chunk_latency_seconds: "P5 First Chunk Latency (s)",
+      p25_first_chunk_latency_seconds: "P25 First Chunk Latency (s)",
       p75_first_chunk_latency_seconds: "P75 First Chunk Latency (s)",
+      p95_first_chunk_latency_seconds: "P95 First Chunk Latency (s)",
+      total_response_time_seconds: "Total Response Time (s)",
+      reasoning_time_seconds: "Reasoning Time (s)",
     };
     const embeddedRows = payload.rows.slice();
     let sourceRows = [];
@@ -1209,6 +1227,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       renderMetricPicker();
       renderTable();
       resetChartCanvas();
+      drawGraph();
       if (syncUrl) updateOptionsUrl();
     }
 
@@ -2367,6 +2386,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     renderMetricPicker();
     renderSelectedMetrics();
     updateScoreScale();
+    updateSummary();
     renderTable();
     drawGraph();
 

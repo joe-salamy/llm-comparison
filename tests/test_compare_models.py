@@ -245,6 +245,42 @@ def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:
     assert 'url.searchParams.set("metrics", selectedCategories.join(","))' in html
     assert "applySelection({ syncUrl: true })" in html
 
+def test_metric_filter_selection_redraws_chart_and_2d_hides_3d_controls(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "one",
+            "quality": "1",
+            "cost": "2",
+            "_raw_values": {"quality": 1.0, "cost": 2.0, "speed": 3.0},
+            FINAL_SCORE: 100.0,
+        }
+    ]
+
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality", "cost"],
+        [{"optimal": True, "suboptimal": False}],
+        ["quality", "cost", "speed"],
+    )
+
+    html = output.read_text(encoding="utf-8")
+    assert "resetChartCanvas();\n      drawGraph();" in html
+    hidden_3d_controls = [
+        "resetCamera",
+        "viewCube",
+        "zoomIndicator",
+    ]
+    for element_id in hidden_3d_controls:
+        assert (
+            f'document.getElementById("{element_id}").hidden = '
+            "categories.length !== 3"
+        ) in html
+
 
 def test_report_supports_persisted_theme_preference(tmp_path: Path) -> None:
     output = tmp_path / "report.html"
