@@ -11,91 +11,143 @@ DEFAULT_CSV = Path("results.csv")
 DEFAULT_HTML = Path("index.html")
 DEFAULT_TEMPLATE = Path("compare_models_template.py")
 
-DISPLAY_HEADERS = [
-    "Model",
-    "Context Window",
-    "Creator",
-    "Providers",
-    "License",
-    "Artificial Analysis Intelligence Index",
-    "Artificial Analysis Omniscience Index",
-    "GDPval-AA",
-    "Terminal-Bench Hard",
-    "Tau2-Bench Telecom",
-    "AA-LCR",
-    "AA-Omniscience Accuracy",
-    "AA-Omniscience Non-Hallucination Rate",
-    "Humanity's Last Exam",
-    "GPQA Diamond",
-    "SciCode",
-    "IFBench",
-    "CritPt",
-    "APEX-Agents-AA",
-    "MMMU Pro",
-    "Blended (USD/1M Tokens)",
-    "Input Price (USD/1M Tokens)",
-    "Output Price (USD/1M Tokens)",
-    "Median (Tokens/s)",
-    "P5 (Tokens/s)",
-    "P25 (Tokens/s)",
-    "P75 (Tokens/s)",
-    "P95 (Tokens/s)",
-    "First Chunk Latency (s)",
-    "First Answer Latency (s)",
-    "P5 First Chunk Latency (s)",
-    "P25 First Chunk Latency (s)",
-    "P75 First Chunk Latency (s)",
-    "P95 First Chunk Latency (s)",
-    "Total Response Time (s)",
-    "Reasoning Time (s)",
-]
-
-CSV_HEADERS = [
-    "model",
-    "context_window_tokens",
-    "creator",
-    "providers",
-    "license",
-    "artificial_analysis_intelligence_index",
-    "artificial_analysis_omniscience_index",
-    "gdpval_aa_pct",
-    "terminal_bench_hard_pct",
-    "tau2_bench_telecom_pct",
-    "aa_lcr_pct",
-    "aa_omniscience_accuracy_pct",
-    "aa_omniscience_non_hallucination_rate_pct",
-    "humanitys_last_exam_pct",
-    "gpqa_diamond_pct",
-    "scicode_pct",
-    "ifbench_pct",
-    "critpt_pct",
-    "apex_agents_aa_pct",
-    "mmmu_pro_pct",
-    "blended_usd_per_1m_tokens",
-    "input_price_usd_per_1m_tokens",
-    "output_price_usd_per_1m_tokens",
-    "median_tokens_per_second",
-    "p5_tokens_per_second",
-    "p25_tokens_per_second",
-    "p75_tokens_per_second",
-    "p95_tokens_per_second",
-    "first_chunk_latency_seconds",
-    "first_answer_latency_seconds",
-    "p5_first_chunk_latency_seconds",
-    "p25_first_chunk_latency_seconds",
-    "p75_first_chunk_latency_seconds",
-    "p95_first_chunk_latency_seconds",
-    "total_response_time_seconds",
-    "reasoning_time_seconds",
-]
+DISPLAY_TO_CSV: dict[str, str] = {
+    "Model": "model",
+    "Context Window": "context_window_tokens",
+    "Creator": "creator",
+    "Providers": "providers",
+    "License": "license",
+    "Artificial Analysis Intelligence Index": "artificial_analysis_intelligence_index",
+    "Artificial Analysis Omniscience Index": "artificial_analysis_omniscience_index",
+    "GDPval-AA": "gdpval_aa_pct",
+    "Terminal-Bench Hard": "terminal_bench_hard_pct",
+    "τ²-Bench Telecom": "tau2_bench_telecom_pct",
+    "AA-LCR": "aa_lcr_pct",
+    "AA-Omniscience Accuracy": "aa_omniscience_accuracy_pct",
+    "AA-Omniscience Non-Hallucination Rate": (
+        "aa_omniscience_non_hallucination_rate_pct"
+    ),
+    "Humanity's Last Exam": "humanitys_last_exam_pct",
+    "GPQA Diamond": "gpqa_diamond_pct",
+    "SciCode": "scicode_pct",
+    "IFBench": "ifbench_pct",
+    "CritPt": "critpt_pct",
+    "APEX-Agents-AA": "apex_agents_aa_pct",
+    "MMMU Pro": "mmmu_pro_pct",
+    "Blended (USD/1M Tokens)": "blended_usd_per_1m_tokens",
+    "Input Price (USD/1M Tokens)": "input_price_usd_per_1m_tokens",
+    "Output Price (USD/1M Tokens)": "output_price_usd_per_1m_tokens",
+    "Median (Tokens/s)": "median_tokens_per_second",
+    "P5 (Tokens/s)": "p5_tokens_per_second",
+    "P25 (Tokens/s)": "p25_tokens_per_second",
+    "P75 (Tokens/s)": "p75_tokens_per_second",
+    "P95 (Tokens/s)": "p95_tokens_per_second",
+    "First Chunk Latency (s)": "first_chunk_latency_seconds",
+    "First Answer Latency (s)": "first_answer_latency_seconds",
+    "P5 First Chunk Latency (s)": "p5_first_chunk_latency_seconds",
+    "P25 First Chunk Latency (s)": "p25_first_chunk_latency_seconds",
+    "P75 First Chunk Latency (s)": "p75_first_chunk_latency_seconds",
+    "P95 First Chunk Latency (s)": "p95_first_chunk_latency_seconds",
+    "Total Response Time (s)": "total_response_time_seconds",
+    "Reasoning Time (s)": "reasoning_time_seconds",
+}
 
 
-def parse_input(path: Path) -> list[list[str]]:
-    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
-    lines = [line for line in lines if line]
+def parse_header_pairs(lines: list[str]) -> list[tuple[str, str]]:
+    """Return (primary, secondary) header pairs from the input header block.
 
+    The header block runs from the start of the file up to (but not including)
+    the 'Further Analysis' marker. Column headers are entries of one or two
+    non-empty lines separated by blank lines.
+    """
     try:
-        start = lines.index("Further Analysis") + 1
+        end = lines.index("Further Analysis")
+    except ValueError as exc:
+        raise ValueError(
+            "Could not find the 'Further Analysis' marker before data rows."
+        ) from exc
+
+    header_block = lines[:end]
+    try:
+        start = header_block.index("Model")
+    except ValueError as exc:
+        raise ValueError(
+            "Could not find the 'Model' column header in the header block."
+        ) from exc
+
+    entries: list[list[str]] = []
+    current: list[str] = []
+    for line in header_block[start:]:
+        if line == "":
+            if current:
+                entries.append(current)
+                current = []
+            continue
+        current.append(line)
+    if current:
+        entries.append(current)
+
+    pairs: list[tuple[str, str]] = []
+    for entry in entries:
+        primary = entry[0]
+        secondary = entry[1] if len(entry) > 1 else ""
+        pairs.append((primary, secondary))
+
+    return pairs
+
+
+def build_display_header(primary: str, secondary: str) -> str:
+    """Build a human-readable display header from an input header pair."""
+    if primary == "Latency" and secondary == "First Chunk (s)":
+        return "First Chunk Latency (s)"
+    if primary in {"First Answer", "P5", "P25", "P75", "P95"}:
+        if secondary == "First Chunk (s)":
+            return f"{primary} First Chunk Latency (s)"
+        if secondary == "(s)":
+            return f"{primary} Latency (s)"
+    if primary == "Total" and secondary == "Response (s)":
+        return "Total Response Time (s)"
+    if primary == "Reasoning" and secondary == "Time (s)":
+        return "Reasoning Time (s)"
+    if secondary in {"USD/1M Tokens", "Tokens/s"}:
+        return f"{primary} ({secondary})"
+    return primary
+
+
+def to_csv_key(display_header: str) -> str:
+    """Convert a display header to a CSV column key."""
+    if display_header in DISPLAY_TO_CSV:
+        return DISPLAY_TO_CSV[display_header]
+    key = display_header.lower()
+    key = re.sub(r"[^a-z0-9]+", "_", key)
+    return key.strip("_")
+
+
+def parse_headers(lines: list[str]) -> tuple[list[str], list[str]]:
+    pairs = parse_header_pairs(lines)
+    display_headers = [
+        build_display_header(primary, secondary)
+        for primary, secondary in pairs
+    ]
+
+    # The copied format omits a 'Providers' header but includes the column
+    # between 'Creator' and 'License'.
+    primary_headers = [primary for primary, _ in pairs]
+    if "Creator" in primary_headers and "Providers" not in display_headers:
+        insert_at = display_headers.index("Creator") + 1
+        display_headers.insert(insert_at, "Providers")
+
+    csv_headers = [to_csv_key(header) for header in display_headers]
+    return display_headers, csv_headers
+
+
+def parse_input(path: Path) -> tuple[list[str], list[str], list[list[str]]]:
+    lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
+    display_headers, csv_headers = parse_headers(lines)
+
+    non_empty_lines = [line for line in lines if line]
+    try:
+        start = non_empty_lines.index("Further Analysis") + 1
     except ValueError as exc:
         raise ValueError(
             "Could not find the 'Further Analysis' marker before data rows."
@@ -105,11 +157,11 @@ def parse_input(path: Path) -> list[list[str]]:
     current: list[str] = []
     index = start
 
-    while index < len(lines):
+    while index < len(non_empty_lines):
         if (
-            index + 1 < len(lines)
-            and lines[index] == "Model"
-            and lines[index + 1] == "Providers"
+            index + 1 < len(non_empty_lines)
+            and non_empty_lines[index] == "Model"
+            and non_empty_lines[index + 1] == "Providers"
         ):
             if current:
                 rows.append(current)
@@ -117,13 +169,13 @@ def parse_input(path: Path) -> list[list[str]]:
             index += 2
             continue
 
-        current.append(lines[index])
+        current.append(non_empty_lines[index])
         index += 1
 
     if current:
         rows.append(current)
 
-    expected_width = len(DISPLAY_HEADERS)
+    expected_width = len(display_headers)
     bad_rows = [
         (row[0] if row else "<empty>", len(row))
         for row in rows
@@ -135,7 +187,7 @@ def parse_input(path: Path) -> list[list[str]]:
             f"Expected {expected_width} columns per row; mismatches: {examples}"
         )
 
-    return rows
+    return display_headers, csv_headers, rows
 
 
 def parse_context_window(value: str) -> str:
@@ -169,10 +221,10 @@ def clean_csv_cell(value: str, column_index: int) -> str:
     )
 
 
-def write_csv(rows: list[list[str]], path: Path) -> None:
+def write_csv(rows: list[list[str]], csv_headers: list[str], path: Path) -> None:
     with path.open("w", encoding="utf-8", newline="") as output:
         writer = csv.writer(output)
-        writer.writerow(CSV_HEADERS)
+        writer.writerow(csv_headers)
         for row in rows:
             writer.writerow(
                 [clean_csv_cell(cell, index) for index, cell in enumerate(row)]
@@ -229,8 +281,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    rows = parse_input(args.input)
-    write_csv(rows, args.csv)
+    _display_headers, csv_headers, rows = parse_input(args.input)
+    write_csv(rows, csv_headers, args.csv)
     updated_files = update_upload_dates([args.template, args.html], args.uploaded_date)
     print(f"Wrote {len(rows)} rows to {args.csv}")
     print(f"Updated upload date in {updated_files} files")
