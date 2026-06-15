@@ -41,6 +41,7 @@ Thumbs.db
 AGENTS.md
 agents.md
 scratchpad.md
+docs/
 
 # Runtime logs and temporary files
 *.log
