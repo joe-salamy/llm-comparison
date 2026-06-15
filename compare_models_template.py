@@ -705,7 +705,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       <div class="filter-line">
         <label class="filter-option">
           <input type="checkbox" id="excludeZeroPrice">
-          <span>Exclude free / promo models (price = 0)</span>
+          <span>Exclude free / promo models</span>
         </label>
       </div>
       <div class="control-note" id="controlNote"></div>
@@ -801,6 +801,17 @@ HTML_TEMPLATE = r"""<!doctype html>
     let excludeZeroPrice = false;
     let rows = payload.rows.slice();
     const lowerIsBetterMarkers = ["price", "usd", "latency", "time"];
+    const mainColumnKeys = [
+      "model",
+      "context_window_tokens",
+      "creator",
+      "artificial_analysis_intelligence_index",
+      "blended_usd_per_1m_tokens",
+      "median_tokens_per_second",
+      "first_chunk_latency_seconds",
+      "total_response_time_seconds",
+      "final_score",
+    ];
     const coreCategoryKeys = [
       "artificial_analysis_intelligence_index",
       "blended_usd_per_1m_tokens",
@@ -1045,6 +1056,12 @@ HTML_TEMPLATE = r"""<!doctype html>
         return { optimal, suboptimal };
       });
     }
+
+    function tableColumns(headers, numericKeys) {
+      const keys = mainColumnKeys.filter(key => key === "final_score" || headers.includes(key));
+      return keys.map(key => ({ key, label: key === "final_score" ? "Final Score" : labelFor(key), numeric: key === "final_score" || numericKeys.has(key) }));
+    }
+
     function scoreSourceRows(categories) {
       const completeRows = [];
       const valuesByCategory = Object.fromEntries(categories.map(category => [category, []]));
