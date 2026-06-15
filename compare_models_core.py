@@ -124,6 +124,15 @@ def numeric_columns(headers: list[str], rows: list[dict[str, str]]) -> set[str]:
             numeric.add(header)
     return numeric
 
+def exclude_zero_price_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    price_key = "blended_usd_per_1m_tokens"
+    kept: list[dict[str, str]] = []
+    for row in rows:
+        price = parse_float(row.get(price_key))
+        if price is not None and price == 0.0:
+            continue
+        kept.append(row)
+    return kept
 
 def normalize_name(name: str) -> str:
     return name.strip().lower().replace("_", "-").replace(" ", "-")
