@@ -7,10 +7,11 @@ Tools for converting and comparing Artificial Analysis LLM data.
 This project uses only the Python standard library at runtime. Python 3.11 or
 newer is required.
 
-For development checks, install the optional tools:
+For development checks, install the optional tools and updater dependency used
+by the documented type-check command:
 
 ```powershell
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,update]"
 ```
 
 For the automated Artificial Analysis updater, install Playwright and its
