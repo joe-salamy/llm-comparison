@@ -1,6 +1,7 @@
 param(
     [string]$PagesBranch = "gh-pages",
-    [string]$CommitMessage = "Update GitHub Pages site"
+    [string]$CommitMessage = "Update GitHub Pages site",
+    [string]$SourceCommitMessage = "Update generated analysis outputs"
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +13,17 @@ function Run-Git {
     }
 }
 
+function Get-StatusPath {
+    param([string]$StatusLine)
+
+    $path = $StatusLine.Substring(3)
+    if ($path -like "* -> *") {
+        return ($path -split " -> ", 2)[1]
+    }
+
+    return $path
+}
+
 $repoRoot = git rev-parse --show-toplevel
 if ($LASTEXITCODE -ne 0) {
     throw "Run this script from inside a git repository."
@@ -19,17 +31,40 @@ if ($LASTEXITCODE -ne 0) {
 
 Set-Location $repoRoot
 
-$status = git status --porcelain
-if ($status) {
-    throw "Working tree must be clean before publishing."
-}
-
 $sourceBranch = git branch --show-current
 if (-not $sourceBranch) {
     throw "Could not determine the current source branch."
 }
 if ($sourceBranch -eq $PagesBranch) {
     throw "Run this script from the source branch, not $PagesBranch."
+}
+
+$generatedFiles = @(
+    ".omp/skill-usage.json",
+    "compare_models_template.py",
+    "index.html",
+    "results.csv"
+)
+
+$status = @(git status --porcelain)
+if ($status.Count -gt 0) {
+    $dirtyPaths = @($status | ForEach-Object { Get-StatusPath $_ } | Select-Object -Unique)
+    $unexpectedPaths = @($dirtyPaths | Where-Object { $generatedFiles -notcontains $_ })
+
+    if ($unexpectedPaths.Count -gt 0) {
+        throw "Working tree has changes outside generated analysis files: $($unexpectedPaths -join ', ')"
+    }
+
+    Run-Git add -- $generatedFiles
+    $generatedStatus = @(git status --porcelain -- $generatedFiles)
+    if ($generatedStatus.Count -gt 0) {
+        Run-Git commit -m $SourceCommitMessage
+    }
+}
+
+$status = @(git status --porcelain)
+if ($status.Count -gt 0) {
+    throw "Working tree must be clean before publishing."
 }
 
 $publicFiles = @(

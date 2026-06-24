@@ -26,17 +26,18 @@ Do not publish `input.txt`, tests, caches, `.codex/`, `AGENTS.md`, build metadat
 Run the bundled script from the repository root:
 
 ```powershell
-.\.codex\skills\github-pages-publisher\scripts\update-gh-pages.ps1
+.\update-gh-pages.ps1
 ```
 
 The script:
 
-1. Verifies the working tree is clean.
-2. Detects the current source branch.
-3. Switches to `gh-pages`, creating an orphan branch if needed.
-4. Replaces the branch contents with only the public files listed above.
-5. Commits the update when there are changes.
-6. Leaves the working tree on `gh-pages`.
+1. Detects the current source branch.
+2. If only `.omp/skill-usage.json`, `compare_models_template.py`, `index.html`, and/or `results.csv` are dirty, commits them first.
+3. Verifies the working tree is clean.
+4. Switches to `gh-pages`, creating an orphan branch if needed.
+5. Replaces the branch contents with only the public files listed above.
+6. Commits the update when there are changes.
+7. Leaves the working tree on `gh-pages`.
 
 After reviewing, push the branch:
 
