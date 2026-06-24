@@ -1,0 +1,14 @@
+{
+  "audit_head_before": "313941f08fcfcab71166c661956c4d38544089f2",
+  "base": "master",
+  "completed_stage": "cleanup_complete",
+  "feature_branch": "feature/auto-update-artificial-analysis-data-plan",
+  "feature_worktree": "C:\\Users\\joesa\\Code\\llm-comparison-auto-update-artificial-analysis-data-plan",
+  "integration_branch": "integration/auto-update-artificial-analysis-data-plan-20260623-202650",
+  "integration_worktree": "C:\\Users\\joesa\\Code\\llm-comparison-integrate-auto-update-artificial-analysis-data-plan-20260623-202650",
+  "merge_mode": "squash",
+  "plan_path": "C:\\Users\\joesa\\Code\\llm-comparison-auto-update-artificial-analysis-data-plan\\.omp\\worktree-flow\\auto-update-artificial-analysis-data-plan\\plan.md",
+  "plan_title": "Auto-update Artificial Analysis data plan",
+  "run_id": "auto-update-artificial-analysis-data-plan-20260623-160812",
+  "slug": "auto-update-artificial-analysis-data-plan"
+}
