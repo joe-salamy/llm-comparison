@@ -4,18 +4,36 @@
       "archive_dir": "C:/Users/joesa/Code/llm-comparison/.omp/skills.archive",
       "scope": "repo",
       "skills": {
+        "audit-worktree": {
+          "archived_at": null,
+          "first_seen": "2026-06-24T04:06:28Z",
+          "last_load_index": 5,
+          "last_seen": "2026-06-24T04:06:28Z",
+          "load_count": 1,
+          "pinned": false,
+          "source_path": "C:/Users/joesa/Code/llm-comparison/.omp/skills/audit-worktree"
+        },
         "github-pages-publisher": {
           "archived_at": null,
           "first_seen": "2026-06-24T03:29:12Z",
-          "last_load_index": 4,
-          "last_seen": "2026-06-24T04:05:41Z",
-          "load_count": 4,
+          "last_load_index": 7,
+          "last_seen": "2026-06-24T04:08:15Z",
+          "load_count": 6,
           "pinned": false,
           "source_path": "C:/Users/joesa/Code/llm-comparison/.omp/skills/github-pages-publisher"
+        },
+        "implement-worktree": {
+          "archived_at": null,
+          "first_seen": "2026-06-24T03:57:39Z",
+          "last_load_index": 8,
+          "last_seen": "2026-06-24T03:57:39Z",
+          "load_count": 1,
+          "pinned": false,
+          "source_path": "C:/Users/joesa/Code/llm-comparison/.omp/skills/implement-worktree"
         }
       },
       "skills_dir": "C:/Users/joesa/Code/llm-comparison/.omp/skills",
-      "total_loads": 4
+      "total_loads": 8
     }
   },
   "version": 1

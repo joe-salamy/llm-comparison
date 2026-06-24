@@ -185,6 +185,74 @@ def test_3d_zoom_indicator_is_rendered_and_updated(tmp_path: Path) -> None:
     assert "zoomIndicator.textContent = `${zoom.toFixed(2)}x`" in html
 
 
+def test_2d_chart_supports_zoom_pan_reset_and_zoom_number(tmp_path: Path) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "one",
+            "quality": "1",
+            "cost": "3",
+            "_raw_values": {"quality": 1.0, "cost": 3.0},
+            FINAL_SCORE: 10.0,
+        },
+        {
+            "model": "two",
+            "quality": "2",
+            "cost": "1",
+            "_raw_values": {"quality": 2.0, "cost": 1.0},
+            FINAL_SCORE: 9.0,
+        },
+    ]
+
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality", "cost"],
+        [
+            {"optimal": True, "suboptimal": False},
+            {"optimal": False, "suboptimal": True},
+        ],
+    )
+
+    html = output.read_text(encoding="utf-8")
+    assert 'id="resetView"' in html
+    assert 'id="zoomIndicator"' in html
+    reset_view_visibility = (
+        'document.getElementById("resetView").hidden = '
+        "![2, 3].includes(categories.length)"
+    )
+    zoom_indicator_visibility = (
+        'document.getElementById("zoomIndicator").hidden = '
+        "![2, 3].includes(categories.length)"
+    )
+    assert reset_view_visibility in html
+    assert zoom_indicator_visibility in html
+    assert ".chart-wrap.is-2d #chart" in html
+    assert (
+        "const initial2DView = { minX: ranges[0].min, maxX: ranges[0].max, "
+        "minY: ranges[1].min, maxY: ranges[1].max, zoom: 1 }"
+        in html
+    )
+    assert "function reset2DView()" in html
+    assert "function update2DZoomIndicator()" in html
+    assert "zoomIndicator.textContent = `${view2D.zoom.toFixed(2)}x`" in html
+    assert "function zoom2DAt(" in html
+    assert "function pan2DBy(" in html
+    assert "function pointIn2DView(row)" in html
+    assert "payload.rows.filter(pointIn2DView).map" in html
+    hover_clear = (
+        'hover = null;\n        tooltip.style.display = "none";\n'
+        "        render();"
+    )
+    assert hover_clear in html
+    assert 'trackChartListener(canvas, "wheel"' in html
+    assert (
+        'trackChartListener(document.getElementById("resetView"), "click", reset2DView)'
+        in html
+    )
+
+
 def test_mobile_3d_chart_supports_touch_controls_and_fullscreen_fallback(
     tmp_path: Path,
 ) -> None:
@@ -245,7 +313,7 @@ def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:
     assert 'url.searchParams.set("metrics", selectedCategories.join(","))' in html
     assert "applySelection({ syncUrl: true })" in html
 
-def test_metric_filter_selection_redraws_chart_and_2d_hides_3d_controls(
+def test_metric_filter_selection_redraws_chart_and_toggles_chart_controls(
     tmp_path: Path,
 ) -> None:
     output = tmp_path / "report.html"
@@ -270,10 +338,18 @@ def test_metric_filter_selection_redraws_chart_and_2d_hides_3d_controls(
 
     html = output.read_text(encoding="utf-8")
     assert "resetChartCanvas();\n      drawGraph();" in html
+    reset_view_visibility = (
+        'document.getElementById("resetView").hidden = '
+        "![2, 3].includes(categories.length)"
+    )
+    zoom_indicator_visibility = (
+        'document.getElementById("zoomIndicator").hidden = '
+        "![2, 3].includes(categories.length)"
+    )
+    assert reset_view_visibility in html
+    assert zoom_indicator_visibility in html
     hidden_3d_controls = [
-        "resetCamera",
         "viewCube",
-        "zoomIndicator",
     ]
     for element_id in hidden_3d_controls:
         assert (

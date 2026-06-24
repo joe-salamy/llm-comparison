@@ -669,6 +669,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         flex-wrap: wrap;
         margin-left: 0;
       }
+      .chart-wrap.is-2d #chart,
       .chart-wrap.is-3d #chart {
         touch-action: none;
       }
@@ -726,7 +727,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         <div id="chartTitle"></div>
         <div class="chart-actions">
           <button class="chart-button" id="fullscreenChart" type="button">Full screen</button>
-          <button class="chart-button" id="resetCamera" type="button" hidden>Reset view</button>
+          <button class="chart-button" id="resetView" type="button" hidden>Reset view</button>
           <div class="legend">
             <span><i class="dot green"></i>Pareto optimal</span>
             <span><i class="dot red"></i>Pareto suboptimal</span>
@@ -1720,12 +1721,13 @@ HTML_TEMPLATE = r"""<!doctype html>
       }
       chartSection.hidden = false;
       chartSection.classList.toggle("is-3d", categories.length === 3);
+      chartSection.classList.toggle("is-2d", categories.length === 2);
       document.getElementById("chartTitle").textContent =
         categories.length === 2 ? "2D category comparison" : "3D category comparison";
       updateFullscreenButton();
-      document.getElementById("resetCamera").hidden = categories.length !== 3;
+      document.getElementById("resetView").hidden = ![2, 3].includes(categories.length);
       document.getElementById("viewCube").hidden = categories.length !== 3;
-      document.getElementById("zoomIndicator").hidden = categories.length !== 3;
+      document.getElementById("zoomIndicator").hidden = ![2, 3].includes(categories.length);
       if (categories.length === 2) draw2D(categories);
       else draw3D(categories);
     }
@@ -1735,18 +1737,153 @@ HTML_TEMPLATE = r"""<!doctype html>
       const trend = fit2DTrend(payload.rows, categories, ranges);
       let hover = null;
       const tooltip = document.getElementById("tooltip");
+      const zoomIndicator = document.getElementById("zoomIndicator");
       const hoverRadius = 18;
+      const initial2DView = { minX: ranges[0].min, maxX: ranges[0].max, minY: ranges[1].min, maxY: ranges[1].max, zoom: 1 };
+      let view2D = { ...initial2DView };
+      let dragging = false;
+      let last = { x: 0, y: 0 };
+      let pinchDistance = 0;
 
-      function project(row, width, height) {
+      function current2DSpan() {
+        return { x: view2D.maxX - view2D.minX, y: view2D.maxY - view2D.minY };
+      }
+
+      function update2DZoomIndicator() {
+        zoomIndicator.textContent = `${view2D.zoom.toFixed(2)}x`;
+      }
+
+      function clamp2DView() {
+        const fullX = ranges[0].span;
+        const fullY = ranges[1].span;
+        const minSpanX = fullX / 8;
+        const minSpanY = fullY / 8;
+        const maxSpanX = fullX / 0.55;
+        const maxSpanY = fullY / 0.55;
+
+        function clampAxis(min, max, range, minSpan, maxSpan) {
+          const maximumSpan = Math.min(maxSpan, range.span);
+          let span = Math.max(0.000001, max - min);
+          if (span < minSpan) {
+            const center = (min + max) / 2;
+            span = minSpan;
+            min = center - span / 2;
+            max = center + span / 2;
+          } else if (span > maximumSpan) {
+            min = range.min;
+            max = range.max;
+            span = range.span;
+          }
+          if (min < range.min) {
+            const offset = range.min - min;
+            min += offset;
+            max += offset;
+          }
+          if (max > range.max) {
+            const offset = max - range.max;
+            min -= offset;
+            max -= offset;
+          }
+          if (min < range.min || max > range.max || max - min > range.span) {
+            min = range.min;
+            max = range.max;
+          }
+          return { min, max };
+        }
+
+        const xBounds = clampAxis(view2D.minX, view2D.maxX, ranges[0], minSpanX, maxSpanX);
+        const yBounds = clampAxis(view2D.minY, view2D.maxY, ranges[1], minSpanY, maxSpanY);
+        view2D.minX = xBounds.min;
+        view2D.maxX = xBounds.max;
+        view2D.minY = yBounds.min;
+        view2D.maxY = yBounds.max;
+        view2D.zoom = Math.max(1, Math.min(8, ranges[0].span / (view2D.maxX - view2D.minX)));
+      }
+
+      function reset2DView() {
+        view2D = { ...initial2DView };
+        update2DZoomIndicator();
+        hover = null;
+        tooltip.style.display = "none";
+        render();
+      }
+
+      function chartPoint(eventOrTouch) {
+        const rect = canvas.getBoundingClientRect();
+        return { x: eventOrTouch.clientX - rect.left, y: eventOrTouch.clientY - rect.top };
+      }
+
+      function projectDataValue(xValue, yValue, width, height) {
         const margins = { top: 54, right: 58, bottom: 74, left: 92 };
         const plotWidth = width - margins.left - margins.right;
         const plotHeight = height - margins.top - margins.bottom;
-        const x = margins.left + ((row.graph[categories[0].key] - ranges[0].min) / ranges[0].span) * plotWidth;
-        const y = height - margins.bottom - ((row.graph[categories[1].key] - ranges[1].min) / ranges[1].span) * plotHeight;
+        const x = margins.left + ((xValue - view2D.minX) / (view2D.maxX - view2D.minX)) * plotWidth;
+        const y = height - margins.bottom - ((yValue - view2D.minY) / (view2D.maxY - view2D.minY)) * plotHeight;
         return { x, y };
       }
 
+      function zoom2DAt(point, factor, width, height) {
+        const margins = { top: 54, right: 58, bottom: 74, left: 92 };
+        const plotLeft = margins.left;
+        const plotBottom = height - margins.bottom;
+        const plotWidth = width - margins.left - margins.right;
+        const plotHeight = height - margins.top - margins.bottom;
+        const span = current2DSpan();
+        const xRatio = Math.max(0, Math.min(1, (point.x - plotLeft) / plotWidth));
+        const yRatio = Math.max(0, Math.min(1, (plotBottom - point.y) / plotHeight));
+        const dataX = view2D.minX + xRatio * span.x;
+        const dataY = view2D.minY + yRatio * span.y;
+        const safeFactor = Math.max(0.01, factor);
+        const nextSpanX = span.x / safeFactor;
+        const nextSpanY = span.y / safeFactor;
+        view2D.minX = dataX - xRatio * nextSpanX;
+        view2D.maxX = view2D.minX + nextSpanX;
+        view2D.minY = dataY - yRatio * nextSpanY;
+        view2D.maxY = view2D.minY + nextSpanY;
+        clamp2DView();
+      }
+
+      function pan2DBy(deltaX, deltaY, width, height) {
+        const margins = { top: 54, right: 58, bottom: 74, left: 92 };
+        const plotWidth = width - margins.left - margins.right;
+        const plotHeight = height - margins.top - margins.bottom;
+        const span = current2DSpan();
+        const domainDeltaX = -(deltaX / plotWidth) * span.x;
+        const domainDeltaY = (deltaY / plotHeight) * span.y;
+        view2D.minX += domainDeltaX;
+        view2D.maxX += domainDeltaX;
+        view2D.minY += domainDeltaY;
+        view2D.maxY += domainDeltaY;
+        clamp2DView();
+      }
+
+      function touchPoint(touch) {
+        return { x: touch.clientX, y: touch.clientY };
+      }
+
+      function touchDistance(touches) {
+        return Math.hypot(
+          touches[0].clientX - touches[1].clientX,
+          touches[0].clientY - touches[1].clientY,
+        );
+      }
+
+      function project(row, width, height) {
+        return projectDataValue(row.graph[categories[0].key], row.graph[categories[1].key], width, height);
+      }
+      function pointIn2DView(row) {
+        const xValue = row.graph[categories[0].key];
+        const yValue = row.graph[categories[1].key];
+        return (
+          xValue >= view2D.minX &&
+          xValue <= view2D.maxX &&
+          yValue >= view2D.minY &&
+          yValue <= view2D.maxY
+        );
+      }
+
       function render() {
+        update2DZoomIndicator();
         const { canvas, ctx, width, height } = setupCanvas();
         ctx.clearRect(0, 0, width, height);
         ctx.lineWidth = 1;
@@ -1784,8 +1921,8 @@ HTML_TEMPLATE = r"""<!doctype html>
           const ratio = index / minorTickCount;
           const x = plotLeft + ratio * plotWidth;
           const y = plotBottom - ratio * plotHeight;
-          const xValue = ranges[0].min + ratio * ranges[0].span;
-          const yValue = ranges[1].min + ratio * ranges[1].span;
+          const xValue = view2D.minX + ratio * (view2D.maxX - view2D.minX);
+          const yValue = view2D.minY + ratio * (view2D.maxY - view2D.minY);
 
           ctx.beginPath();
           ctx.moveTo(x, plotTop);
@@ -1824,8 +1961,10 @@ HTML_TEMPLATE = r"""<!doctype html>
 
         let trendSegment = null;
         if (trend) {
-          const start = { x: plotLeft, y: plotBottom - trend.intercept * plotHeight };
-          const end = { x: plotRight, y: plotBottom - (trend.intercept + trend.slope) * plotHeight };
+          const startYRatio = trend.intercept + trend.slope * ((view2D.minX - ranges[0].min) / ranges[0].span);
+          const endYRatio = trend.intercept + trend.slope * ((view2D.maxX - ranges[0].min) / ranges[0].span);
+          const start = projectDataValue(view2D.minX, ranges[1].min + startYRatio * ranges[1].span, width, height);
+          const end = projectDataValue(view2D.maxX, ranges[1].min + endYRatio * ranges[1].span, width, height);
           trendSegment = { start, end };
           ctx.save();
           ctx.beginPath();
@@ -1841,7 +1980,7 @@ HTML_TEMPLATE = r"""<!doctype html>
           ctx.restore();
         }
 
-        const projected = payload.rows.map(row => ({ row, ...project(row, width, height) }));
+        const projected = payload.rows.filter(pointIn2DView).map(row => ({ row, ...project(row, width, height) }));
         const modelLabelBounds = {
           left: plotLeft + 4,
           right: plotRight - 4,
@@ -1849,6 +1988,10 @@ HTML_TEMPLATE = r"""<!doctype html>
           bottom: plotBottom - 4,
         };
         const occupiedLabels = [];
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(plotLeft, plotTop, plotWidth, plotHeight);
+        ctx.clip();
         for (const point of projected) {
           ctx.beginPath();
           ctx.fillStyle = pointColor(point.row);
@@ -1885,18 +2028,51 @@ HTML_TEMPLATE = r"""<!doctype html>
             );
           }
         }
+        ctx.restore();
         canvas._points = projected;
       }
 
       chartRender = render;
       const canvas = document.getElementById("chart");
-      trackChartListener(canvas, "mousemove", event => {
+      trackChartListener(canvas, "mousedown", event => {
+        dragging = true;
+        last = { x: event.clientX, y: event.clientY };
+        hover = null;
+        tooltip.style.display = "none";
+        canvas.style.cursor = "grabbing";
+      });
+      trackChartListener(window, "mouseup", () => {
+        dragging = false;
+        canvas.style.cursor = hover ? "pointer" : "";
+      });
+      trackChartListener(window, "mousemove", event => {
+        if (dragging) {
+          const rect = canvas.getBoundingClientRect();
+          pan2DBy(event.clientX - last.x, event.clientY - last.y, rect.width, rect.height);
+          last = { x: event.clientX, y: event.clientY };
+          hover = null;
+          tooltip.style.display = "none";
+          canvas.style.cursor = "grabbing";
+          render();
+          return;
+        }
         const rect = canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        const nearest = (canvas._points || []).reduce((best, point) => {
-          const distance = Math.hypot(point.x - x, point.y - y);
-          return distance < best.distance ? { point, distance } : best;
+        const inCanvas =
+          event.clientX >= rect.left &&
+          event.clientX <= rect.right &&
+          event.clientY >= rect.top &&
+          event.clientY <= rect.bottom;
+        if (!inCanvas) {
+          hover = null;
+          canvas.style.cursor = "";
+          tooltip.style.display = "none";
+          render();
+          return;
+        }
+        const point = chartPoint(event);
+        const nearest = (canvas._points || []).reduce((best, candidate) => {
+          const distance = Math.hypot(candidate.x - point.x, candidate.y - point.y);
+          return distance < best.distance ? { point: candidate, distance } : best;
         }, { point: null, distance: Infinity });
         hover = nearest.distance < hoverRadius ? nearest.point : null;
         canvas.style.cursor = hover ? "pointer" : "";
@@ -1910,12 +2086,66 @@ HTML_TEMPLATE = r"""<!doctype html>
         }
         render();
       });
-      trackChartListener(canvas, "mouseleave", () => {
+      trackChartListener(canvas, "wheel", event => {
+        event.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        zoom2DAt(point, event.deltaY < 0 ? 1.08 : 0.92, rect.width, rect.height);
         hover = null;
-        canvas.style.cursor = "";
         tooltip.style.display = "none";
         render();
+      }, { passive: false });
+      trackChartListener(canvas, "touchstart", event => {
+        if (event.touches.length === 1) {
+          dragging = true;
+          last = touchPoint(event.touches[0]);
+        } else if (event.touches.length === 2) {
+          dragging = false;
+          pinchDistance = touchDistance(event.touches);
+        }
+      }, { passive: false });
+      trackChartListener(canvas, "touchmove", event => {
+        if (event.touches.length === 1 && dragging) {
+          event.preventDefault();
+          const touch = event.touches[0];
+          const rect = canvas.getBoundingClientRect();
+          pan2DBy(touch.clientX - last.x, touch.clientY - last.y, rect.width, rect.height);
+          last = touchPoint(touch);
+          hover = null;
+          tooltip.style.display = "none";
+          render();
+        } else if (event.touches.length === 2) {
+          event.preventDefault();
+          const nextDistance = touchDistance(event.touches);
+          if (pinchDistance > 0) {
+            const rect = canvas.getBoundingClientRect();
+            const midpoint = {
+              x: ((event.touches[0].clientX + event.touches[1].clientX) / 2) - rect.left,
+              y: ((event.touches[0].clientY + event.touches[1].clientY) / 2) - rect.top,
+            };
+            zoom2DAt(midpoint, nextDistance / pinchDistance, rect.width, rect.height);
+            hover = null;
+            tooltip.style.display = "none";
+            render();
+          }
+          pinchDistance = nextDistance;
+        }
+      }, { passive: false });
+      trackChartListener(canvas, "touchend", event => {
+        if (!event.touches.length) {
+          dragging = false;
+          pinchDistance = 0;
+        } else if (event.touches.length === 1) {
+          dragging = true;
+          last = touchPoint(event.touches[0]);
+          pinchDistance = 0;
+        }
       });
+      trackChartListener(canvas, "touchcancel", () => {
+        dragging = false;
+        pinchDistance = 0;
+      });
+      trackChartListener(document.getElementById("resetView"), "click", reset2DView);
       trackChartListener(window, "resize", render);
       render();
     }
@@ -2309,7 +2539,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         dragging = false;
         pinchDistance = 0;
       });
-      trackChartListener(document.getElementById("resetCamera"), "click", () => {
+      trackChartListener(document.getElementById("resetView"), "click", () => {
         setCamera(initialCamera);
       });
       trackChartListener(viewCube, "click", event => {
