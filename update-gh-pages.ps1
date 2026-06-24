@@ -84,29 +84,32 @@ foreach ($path in $publicFiles) {
 }
 
 $branchExists = git show-ref --verify --quiet "refs/heads/$PagesBranch"
-if ($LASTEXITCODE -eq 0) {
-    Run-Git switch $PagesBranch
-} else {
-    Run-Git switch --orphan $PagesBranch
+try {
+    if ($LASTEXITCODE -eq 0) {
+        Run-Git switch $PagesBranch
+    } else {
+        Run-Git switch --orphan $PagesBranch
+    }
+
+    Get-ChildItem -LiteralPath $repoRoot -Force |
+        Where-Object { $_.Name -ne ".git" } |
+        Remove-Item -Recurse -Force
+
+    foreach ($path in $publicFiles) {
+        Run-Git checkout $sourceBranch -- $path
+    }
+
+    Run-Git add -A
+
+    $pending = git status --porcelain
+    if (-not $pending) {
+        Write-Host "No GitHub Pages changes to commit."
+    } else {
+        Run-Git commit -m $CommitMessage
+
+        Write-Host "Updated $PagesBranch from $sourceBranch."
+        Write-Host "Review the branch, then run: git push -u origin $PagesBranch"
+    }
+} finally {
+    Run-Git switch master
 }
-
-Get-ChildItem -LiteralPath $repoRoot -Force |
-    Where-Object { $_.Name -ne ".git" } |
-    Remove-Item -Recurse -Force
-
-foreach ($path in $publicFiles) {
-    Run-Git checkout $sourceBranch -- $path
-}
-
-Run-Git add -A
-
-$pending = git status --porcelain
-if (-not $pending) {
-    Write-Host "No GitHub Pages changes to commit."
-    exit 0
-}
-
-Run-Git commit -m $CommitMessage
-
-Write-Host "Updated $PagesBranch from $sourceBranch."
-Write-Host "Review the branch, then run: git push -u origin $PagesBranch"
