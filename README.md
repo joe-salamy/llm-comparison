@@ -7,10 +7,19 @@ Tools for converting and comparing Artificial Analysis LLM data.
 This project uses only the Python standard library at runtime. Python 3.11 or
 newer is required.
 
-For development checks, install the optional tools:
+For development checks, install the optional tools and updater dependency used
+by the documented type-check command:
 
 ```powershell
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,update]"
+```
+
+For the automated Artificial Analysis updater, install Playwright and its
+Chromium browser:
+
+```powershell
+python -m pip install -e ".[update]"
+python -m playwright install chromium
 ```
 
 ## Data
@@ -18,7 +27,7 @@ python -m pip install -e ".[dev]"
 The comparison script uses `results.csv` as its source of truth. Generated
 reports are written to the repository root.
 
-Raw copied source text lives in `input.txt`. Converted CSV output lives in
+Manual raw-copy source text lives in `input.txt`. Converted CSV output lives in
 `results.csv`.
 
 ## Compare Models
@@ -58,7 +67,19 @@ Common aliases include `intelligence`, `price`, `speed`, `latency`, and `respons
 
 ## Convert Raw Results
 
-Use `convert_results.py` to convert copied Artificial Analysis source text into CSV output.
+Use `update_artificial_analysis.py` to refresh Artificial Analysis data without
+manual clipboard selection:
+
+```powershell
+python update_artificial_analysis.py --uploaded-date YYYY-MM-DD
+```
+
+The updater opens the Artificial Analysis leaderboard, expands columns, reads
+the table DOM, writes `results.csv`, and updates the displayed data date in
+`compare_models_template.py` and `index.html` when those files are present.
+
+If the automated updater is unavailable, use `convert_results.py` as a manual
+fallback for copied Artificial Analysis source text:
 
 1. Go to https://artificialanalysis.ai/leaderboards/models
 2. Expand all columns
@@ -66,7 +87,7 @@ Use `convert_results.py` to convert copied Artificial Analysis source text into 
 4. Paste into `input.txt`
 5. Run `python convert_results.py`
 
-By default, the converter writes `results.csv`.
+By default, both converters write `results.csv`.
 
 ## Development
 
@@ -74,7 +95,7 @@ Run the validation checks before publishing changes:
 
 ```powershell
 python -m ruff check .
-python -m mypy compare_models.py compare_models_core.py convert_results.py tests
+python -m mypy compare_models.py compare_models_core.py convert_results.py update_artificial_analysis.py tests
 python -m pytest
 ```
 

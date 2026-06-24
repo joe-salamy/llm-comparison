@@ -9,6 +9,7 @@ from convert_results import (
     parse_headers,
     parse_input,
     update_upload_dates,
+    write_table_csv,
 )
 
 
@@ -40,7 +41,6 @@ def test_parse_headers_derives_columns_from_input() -> None:
         "Model",
         "Context Window",
         "Creator",
-        "Providers",
         "License",
         "ITBench-AA",
         "Blended (USD/1M Tokens)",
@@ -49,14 +49,15 @@ def test_parse_headers_derives_columns_from_input() -> None:
         "model",
         "context_window_tokens",
         "creator",
-        "providers",
         "license",
         "itbench_aa",
         "blended_usd_per_1m_tokens",
     ]
 
 
-def test_parse_input_adapts_to_new_columns(tmp_path: Path) -> None:
+def test_parse_input_preserves_legacy_provider_insertion_when_rows_have_extra_value(
+    tmp_path: Path,
+) -> None:
     lines = [
         "Features",
         "",
@@ -68,9 +69,6 @@ def test_parse_input_adapts_to_new_columns(tmp_path: Path) -> None:
         "",
         "License",
         "",
-        "ITBench-AA",
-        "Kubernetes Incident Root-Cause Analysis",
-        "",
         "Further Analysis",
         "Model",
         "Providers",
@@ -79,17 +77,60 @@ def test_parse_input_adapts_to_new_columns(tmp_path: Path) -> None:
         "Anthropic",
         "Anthropic",
         "Proprietary",
-        "50",
     ]
     path = tmp_path / "input.txt"
     path.write_text("\n".join(lines), encoding="utf-8")
 
     display_headers, csv_headers, rows = parse_input(path)
-    assert display_headers[-1] == "ITBench-AA"
-    assert csv_headers[-1] == "itbench_aa"
-    assert len(rows) == 1
-    assert len(rows[0]) == len(display_headers)
-    assert rows[0][0] == "Claude Test"
+
+    assert display_headers == [
+        "Model",
+        "Context Window",
+        "Creator",
+        "Providers",
+        "License",
+    ]
+    assert csv_headers == [
+        "model",
+        "context_window_tokens",
+        "creator",
+        "providers",
+        "license",
+    ]
+    assert rows == [["Claude Test", "1M", "Anthropic", "Anthropic", "Proprietary"]]
+
+
+def test_parse_input_does_not_insert_provider_for_structured_width(
+    tmp_path: Path,
+) -> None:
+    lines = [
+        "Features",
+        "",
+        "Model",
+        "",
+        "Context Window",
+        "",
+        "Creator",
+        "",
+        "License",
+        "",
+        "Further Analysis",
+        "Model",
+        "Providers",
+        "Claude Test",
+        "1M",
+        "Anthropic",
+        "Proprietary",
+    ]
+    path = tmp_path / "input.txt"
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+    display_headers, csv_headers, rows = parse_input(path)
+
+    assert display_headers == ["Model", "Context Window", "Creator", "License"]
+    assert csv_headers == ["model", "context_window_tokens", "creator", "license"]
+    assert "providers" not in csv_headers
+    assert rows == [["Claude Test", "1M", "Anthropic", "Proprietary"]]
 
 def test_parse_context_window_converts_k_and_m_suffixes() -> None:
     assert parse_context_window("128k") == "128000"
@@ -98,10 +139,23 @@ def test_parse_context_window_converts_k_and_m_suffixes() -> None:
 
 
 def test_clean_csv_cell_normalizes_numeric_values() -> None:
-    assert clean_csv_cell("$1,234.50", 20) == "1234.50"
-    assert clean_csv_cell("98%", 5) == "98"
-    assert clean_csv_cell("--", 5) == ""
-    assert clean_csv_cell("1.05M", 1) == "1050000"
+    assert clean_csv_cell("$1,234.50", "input_price_usd_per_1m_tokens") == "1234.50"
+    assert clean_csv_cell("98%", "gpqa_diamond_pct") == "98"
+    assert clean_csv_cell("--", "license") == ""
+    assert clean_csv_cell("1.05M", "context_window_tokens") == "1050000"
+    assert clean_csv_cell("1.05M", "model") == "1.05M"
+
+
+def test_write_table_csv_dedupes_dynamic_headers(tmp_path: Path) -> None:
+    path = tmp_path / "results.csv"
+
+    csv_headers = write_table_csv(["Score", "Score"], [["1,234", "56%"]], path)
+
+    assert csv_headers == ["score", "score_2"]
+    assert path.read_text(encoding="utf-8").splitlines() == [
+        "score,score_2",
+        "1234,56",
+    ]
 
 
 def test_update_upload_dates_rewrites_template_and_html_dates(tmp_path: Path) -> None:

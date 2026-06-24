@@ -123,21 +123,27 @@ def to_csv_key(display_header: str) -> str:
     return key.strip("_")
 
 
+def csv_headers_from_display_headers(display_headers: list[str]) -> list[str]:
+    return [to_csv_key(header) for header in display_headers]
+
+
+def dedupe_csv_headers(csv_headers: list[str]) -> list[str]:
+    seen: dict[str, int] = {}
+    deduped: list[str] = []
+    for header in csv_headers:
+        count = seen.get(header, 0) + 1
+        seen[header] = count
+        deduped.append(header if count == 1 else f"{header}_{count}")
+    return deduped
+
+
 def parse_headers(lines: list[str]) -> tuple[list[str], list[str]]:
     pairs = parse_header_pairs(lines)
     display_headers = [
         build_display_header(primary, secondary)
         for primary, secondary in pairs
     ]
-
-    # The copied format omits a 'Providers' header but includes the column
-    # between 'Creator' and 'License'.
-    primary_headers = [primary for primary, _ in pairs]
-    if "Creator" in primary_headers and "Providers" not in display_headers:
-        insert_at = display_headers.index("Creator") + 1
-        display_headers.insert(insert_at, "Providers")
-
-    csv_headers = [to_csv_key(header) for header in display_headers]
+    csv_headers = csv_headers_from_display_headers(display_headers)
     return display_headers, csv_headers
 
 
@@ -175,7 +181,30 @@ def parse_input(path: Path) -> tuple[list[str], list[str], list[list[str]]]:
     if current:
         rows.append(current)
 
-    expected_width = len(display_headers)
+    row_widths = [len(row) for row in rows]
+    base_width = len(display_headers)
+    if rows and all(width == base_width for width in row_widths):
+        expected_width = base_width
+    elif (
+        rows
+        and "Creator" in display_headers
+        and all(width == base_width + 1 for width in row_widths)
+    ):
+        insert_at = display_headers.index("Creator") + 1
+        display_headers.insert(insert_at, "Providers")
+        csv_headers = csv_headers_from_display_headers(display_headers)
+        expected_width = len(display_headers)
+    else:
+        bad_rows = [
+            (row[0] if row else "<empty>", len(row))
+            for row in rows
+            if len(row) != base_width
+        ]
+        examples = ", ".join(f"{name}: {width}" for name, width in bad_rows[:5])
+        raise ValueError(
+            f"Expected {base_width} columns per row; mismatches: {examples}"
+        )
+
     bad_rows = [
         (row[0] if row else "<empty>", len(row))
         for row in rows
@@ -200,12 +229,12 @@ def parse_context_window(value: str) -> str:
     return str(int(number * multiplier))
 
 
-def clean_csv_cell(value: str, column_index: int) -> str:
+def clean_csv_cell(value: str, csv_header: str) -> str:
     value = value.strip().replace("−", "-")
     if value == "--":
         return ""
 
-    if column_index == 1:
+    if csv_header == "context_window_tokens":
         return parse_context_window(value)
 
     if value.startswith("$"):
@@ -222,13 +251,42 @@ def clean_csv_cell(value: str, column_index: int) -> str:
 
 
 def write_csv(rows: list[list[str]], csv_headers: list[str], path: Path) -> None:
+    final_headers = dedupe_csv_headers(csv_headers)
+    expected_width = len(final_headers)
+    bad_rows = [
+        (index, len(row))
+        for index, row in enumerate(rows, start=1)
+        if len(row) != expected_width
+    ]
+    if bad_rows:
+        examples = ", ".join(f"row {index}: {width}" for index, width in bad_rows[:5])
+        raise ValueError(
+            f"Expected {expected_width} columns per row before writing CSV; "
+            f"mismatches: {examples}"
+        )
+
+    if path.parent != Path("."):
+        path.parent.mkdir(parents=True, exist_ok=True)
+
     with path.open("w", encoding="utf-8", newline="") as output:
         writer = csv.writer(output)
-        writer.writerow(csv_headers)
+        writer.writerow(final_headers)
         for row in rows:
             writer.writerow(
-                [clean_csv_cell(cell, index) for index, cell in enumerate(row)]
+                [
+                    clean_csv_cell(cell, csv_header)
+                    for cell, csv_header in zip(row, final_headers, strict=True)
+                ]
             )
+
+
+def write_table_csv(
+    display_headers: list[str], rows: list[list[str]], path: Path
+) -> list[str]:
+    csv_headers = csv_headers_from_display_headers(display_headers)
+    final_headers = dedupe_csv_headers(csv_headers)
+    write_csv(rows, csv_headers, path)
+    return final_headers
 
 
 def format_display_date(uploaded_date: date) -> str:

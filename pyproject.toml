@@ -13,6 +13,7 @@ py-modules = [
     "compare_models_core",
     "compare_models_template",
     "convert_results",
+    "update_artificial_analysis",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +21,9 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.8",
     "mypy>=1.13",
+]
+update = [
+    "playwright>=1.49",
 ]
 
 [tool.ruff]
