@@ -229,6 +229,7 @@ def test_2d_chart_supports_zoom_pan_reset_and_zoom_number(tmp_path: Path) -> Non
     assert reset_view_visibility in html
     assert zoom_indicator_visibility in html
     assert ".chart-wrap.is-2d #chart" in html
+    assert ".chart-wrap.is-2d .zoom-indicator {\n      top: 12px;\n    }" in html
     assert (
         "const initial2DView = { minX: ranges[0].min, maxX: ranges[0].max, "
         "minY: ranges[1].min, maxY: ranges[1].max, zoom: 1 }"
@@ -312,6 +313,42 @@ def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:
     assert "function orderedValidMetricKeys(keys)" in html
     assert 'url.searchParams.set("metrics", selectedCategories.join(","))' in html
     assert "applySelection({ syncUrl: true })" in html
+
+
+
+def test_report_can_reset_to_original_metric_selection(tmp_path: Path) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "one",
+            "quality": "1",
+            "cost": "2",
+            "speed": "3",
+            "_raw_values": {"quality": 1.0, "cost": 2.0, "speed": 3.0},
+            FINAL_SCORE: 100.0,
+        }
+    ]
+
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["cost", "quality", "speed"],
+        [{"optimal": True, "suboptimal": False}],
+        ["quality", "cost", "speed"],
+    )
+
+    reset_listener = (
+        'document.getElementById("resetMetrics").addEventListener('
+        '"click", resetMetrics)'
+    )
+    html = output.read_text(encoding="utf-8")
+    assert 'id="resetMetrics"' in html
+    assert "const initialSelectedCategories = payload.categories.map" in html
+    assert "let selectedCategories = initialSelectedCategories.slice();" in html
+    assert "function resetMetrics()" in html
+    assert reset_listener in html
+
 
 def test_metric_filter_selection_redraws_chart_and_toggles_chart_controls(
     tmp_path: Path,
