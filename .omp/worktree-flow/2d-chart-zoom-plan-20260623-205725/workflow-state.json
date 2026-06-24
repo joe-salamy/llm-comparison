@@ -1,0 +1,14 @@
+{
+  "audit_head_before": "a75b5355e34cc6da7b064da2de83bffe2bc955a1",
+  "base": "master",
+  "completed_stage": "cleanup_complete",
+  "feature_branch": "feature/2d-chart-zoom-plan",
+  "feature_worktree": "C:\\Users\\joesa\\Code\\llm-comparison-2d-chart-zoom-plan",
+  "integration_branch": "integration/2d-chart-zoom-plan-20260623-211700",
+  "integration_worktree": "C:\\Users\\joesa\\Code\\llm-comparison-integrate-2d-chart-zoom-plan-20260623-211700",
+  "merge_mode": "squash",
+  "plan_path": "C:\\Users\\joesa\\Code\\llm-comparison-2d-chart-zoom-plan\\.omp\\worktree-flow\\2d-chart-zoom-plan\\plan.md",
+  "plan_title": "2D chart zoom plan",
+  "run_id": "2d-chart-zoom-plan-20260623-205725",
+  "slug": "2d-chart-zoom-plan"
+}
