@@ -16,9 +16,9 @@
         "github-pages-publisher": {
           "archived_at": null,
           "first_seen": "2026-06-24T03:29:12Z",
-          "last_load_index": 7,
-          "last_seen": "2026-06-24T04:08:15Z",
-          "load_count": 6,
+          "last_load_index": 9,
+          "last_seen": "2026-06-24T04:23:10Z",
+          "load_count": 7,
           "pinned": false,
           "source_path": "C:/Users/joesa/Code/llm-comparison/.omp/skills/github-pages-publisher"
         },
@@ -33,7 +33,7 @@
         }
       },
       "skills_dir": "C:/Users/joesa/Code/llm-comparison/.omp/skills",
-      "total_loads": 8
+      "total_loads": 9
     }
   },
   "version": 1

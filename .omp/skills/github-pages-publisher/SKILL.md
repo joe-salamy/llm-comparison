@@ -37,13 +37,8 @@ The script:
 4. Switches to `gh-pages`, creating an orphan branch if needed.
 5. Replaces the branch contents with only the public files listed above.
 6. Commits the update when there are changes.
-7. Leaves the working tree on `gh-pages`.
+7. Pushes `gh-pages` to `origin` with upstream tracking.
+8. Switches back to the original source branch as the final step.
 
-After reviewing, push the branch:
-
-```powershell
-git push -u origin gh-pages
-```
-
-For later updates, run the script again from the source branch after regenerating `index.html` and `results.csv`, then push `gh-pages`.
+For later updates, run the script again from the source branch after regenerating `index.html` and `results.csv`.
 

@@ -108,8 +108,10 @@ try {
         Run-Git commit -m $CommitMessage
 
         Write-Host "Updated $PagesBranch from $sourceBranch."
-        Write-Host "Review the branch, then run: git push -u origin $PagesBranch"
     }
+
+    Run-Git push -u origin $PagesBranch
+    Write-Host "Pushed $PagesBranch to origin."
 } finally {
-    Run-Git switch master
+    Run-Git switch $sourceBranch
 }
