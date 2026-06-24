@@ -526,6 +526,9 @@ HTML_TEMPLATE = r"""<!doctype html>
       -webkit-backdrop-filter: blur(8px);
       backdrop-filter: blur(8px);
     }
+    .chart-wrap.is-2d .zoom-indicator {
+      top: 12px;
+    }
     .zoom-indicator[hidden] {
       display: none;
     }
@@ -711,6 +714,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         <div class="selected-metrics" id="selectedMetrics" aria-live="polite"></div>
         <div class="selection-actions">
           <button class="clear-button" id="clearMetrics" type="button">Clear all</button>
+          <button class="clear-button" id="resetMetrics" type="button">Reset</button>
           <button class="run-button" id="runComparison" type="button">Run comparison</button>
         </div>
       </div>
@@ -816,7 +820,8 @@ HTML_TEMPLATE = r"""<!doctype html>
     const embeddedRows = payload.rows.slice();
     let sourceRows = [];
     let availableCategories = (payload.availableCategories || payload.categories).slice();
-    let selectedCategories = payload.categories.map(category => category.key);
+    const initialSelectedCategories = payload.categories.map(category => category.key);
+    let selectedCategories = initialSelectedCategories.slice();
     let excludeZeroPrice = true;
     let rows = payload.rows.slice();
     const lowerIsBetterMarkers = ["price", "usd", "latency", "time"];
@@ -1298,6 +1303,12 @@ HTML_TEMPLATE = r"""<!doctype html>
 
     function clearMetrics() {
       selectedCategories = [];
+      renderSelectedMetrics();
+      renderMetricPicker();
+    }
+
+    function resetMetrics() {
+      selectedCategories = initialSelectedCategories.slice();
       renderSelectedMetrics();
       renderMetricPicker();
     }
@@ -2575,6 +2586,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 
     document.getElementById("runComparison").addEventListener("click", () => applySelection({ syncUrl: true }));
     document.getElementById("clearMetrics").addEventListener("click", clearMetrics);
+    document.getElementById("resetMetrics").addEventListener("click", resetMetrics);
     document.getElementById("excludeZeroPrice").addEventListener("change", (event) => {
       excludeZeroPrice = event.target.checked;
       applySelection({ syncUrl: true });
