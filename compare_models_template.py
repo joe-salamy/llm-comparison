@@ -715,7 +715,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       </div>
       <div class="filter-line">
         <label class="filter-option">
-          <input type="checkbox" id="excludeZeroPrice">
+          <input type="checkbox" id="excludeZeroPrice" checked>
           <span>Exclude free / promo models</span>
         </label>
       </div>
@@ -816,7 +816,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     let sourceRows = [];
     let availableCategories = (payload.availableCategories || payload.categories).slice();
     let selectedCategories = payload.categories.map(category => category.key);
-    let excludeZeroPrice = false;
+    let excludeZeroPrice = true;
     let rows = payload.rows.slice();
     const lowerIsBetterMarkers = ["price", "usd", "latency", "time"];
     const mainColumnKeys = [
@@ -936,7 +936,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       const params = new URLSearchParams(window.location.search);
       const metrics = metricKeysFromUrl();
       if (metrics.length) selectedCategories = metrics;
-      excludeZeroPrice = params.get("excludeZeroPrice") === "1";
+      const excludeZeroPriceParam = params.get("excludeZeroPrice");
+      excludeZeroPrice = excludeZeroPriceParam === null ? true : excludeZeroPriceParam !== "0";
       syncExcludeZeroPriceCheckbox();
     }
 
@@ -953,9 +954,9 @@ HTML_TEMPLATE = r"""<!doctype html>
         url.searchParams.delete("metrics");
       }
       if (excludeZeroPrice) {
-        url.searchParams.set("excludeZeroPrice", "1");
-      } else {
         url.searchParams.delete("excludeZeroPrice");
+      } else {
+        url.searchParams.set("excludeZeroPrice", "0");
       }
       window.history.replaceState({}, "", url);
     }
