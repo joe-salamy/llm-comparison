@@ -764,7 +764,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     <section class="info-wrap" aria-labelledby="aboutTitle">
       <h2 class="info-title" id="aboutTitle">About this comparison</h2>
       <div class="info-grid">
-        <p>This static report ranks LLMs from the included <code>results.csv</code> data file. The source data was copied from Artificial Analysis, converted locally, and published here so viewers can change comparisons without collecting the data themselves.</p>
+        <p>This static report ranks LLMs from the included <code>data/results.csv</code> data file. The source data was copied from Artificial Analysis, converted locally, and published here so viewers can change comparisons without collecting the data themselves.</p>
         <ul>
           <li>Higher is better for quality, benchmark, context, and speed metrics.</li>
           <li>Lower is better for price, latency, and time metrics.</li>
@@ -2633,8 +2633,8 @@ HTML_TEMPLATE = r"""<!doctype html>
     renderTable();
     drawGraph();
 
-    fetch("results.csv")
-      .then(response => response.ok ? response.text() : Promise.reject(new Error("results.csv not found")))
+    fetch("../data/results.csv")
+      .then(response => response.ok ? response.text() : Promise.reject(new Error("../data/results.csv not found")))
       .then(text => initializeFromCsv(parseCsv(text)))
       .catch(() => {
         updateScoreScale();
