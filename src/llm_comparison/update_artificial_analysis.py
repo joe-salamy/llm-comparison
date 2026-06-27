@@ -8,12 +8,12 @@ from datetime import date
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
-from convert_results import build_display_header, update_upload_dates, write_table_csv
+from .convert_results import build_display_header, update_upload_dates, write_table_csv
 
 DEFAULT_URL = "https://artificialanalysis.ai/leaderboards/models"
-DEFAULT_CSV = Path("results.csv")
-DEFAULT_HTML = Path("index.html")
-DEFAULT_TEMPLATE = Path("compare_models_template.py")
+DEFAULT_CSV = Path("data/results.csv")
+DEFAULT_HTML = Path("public/index.html")
+DEFAULT_TEMPLATE = Path("src/llm_comparison/compare_models_template.py")
 
 
 class HeaderSnapshot(TypedDict):

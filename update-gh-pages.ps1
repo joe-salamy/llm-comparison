@@ -40,9 +40,9 @@ if ($sourceBranch -eq $PagesBranch) {
 }
 
 $generatedFiles = @(
-    "compare_models_template.py",
-    "index.html",
-    "results.csv"
+    "src/llm_comparison/compare_models_template.py",
+    "public/index.html",
+    "data/results.csv"
 )
 
 $status = @(git status --porcelain)
@@ -67,18 +67,18 @@ if ($status.Count -gt 0) {
 }
 
 $publicFiles = @(
-    "index.html",
-    "results.csv",
-    "compare_models.py",
-    "compare_models_core.py",
-    "compare_models_template.py",
-    "README.md",
-    ".gitignore"
+    @{ Source = "public/index.html"; Destination = "index.html" },
+    @{ Source = "data/results.csv"; Destination = "results.csv" },
+    @{ Source = "src/llm_comparison/compare_models.py"; Destination = "compare_models.py" },
+    @{ Source = "src/llm_comparison/compare_models_core.py"; Destination = "compare_models_core.py" },
+    @{ Source = "src/llm_comparison/compare_models_template.py"; Destination = "compare_models_template.py" },
+    @{ Source = "README.md"; Destination = "README.md" },
+    @{ Source = ".gitignore"; Destination = ".gitignore" }
 )
 
-foreach ($path in $publicFiles) {
-    if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $path))) {
-        throw "Required public file is missing on ${sourceBranch}: $path"
+foreach ($file in $publicFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $file.Source))) {
+        throw "Required public file is missing on ${sourceBranch}: $($file.Source)"
     }
 }
 
@@ -94,8 +94,25 @@ try {
         Where-Object { $_.Name -ne ".git" } |
         Remove-Item -Recurse -Force
 
-    foreach ($path in $publicFiles) {
-        Run-Git checkout $sourceBranch -- $path
+    foreach ($file in $publicFiles) {
+        Run-Git checkout $sourceBranch -- $file.Source
+
+        $sourcePath = Join-Path $repoRoot $file.Source
+        $destinationPath = Join-Path $repoRoot $file.Destination
+        $destinationDir = Split-Path -Parent $destinationPath
+        if ($destinationDir -and -not (Test-Path -LiteralPath $destinationDir)) {
+            New-Item -ItemType Directory -Path $destinationDir | Out-Null
+        }
+        if ($sourcePath -ne $destinationPath) {
+            Move-Item -LiteralPath $sourcePath -Destination $destinationPath -Force
+        }
+    }
+
+    foreach ($path in @("src", "public", "data")) {
+        $publishPath = Join-Path $repoRoot $path
+        if (Test-Path -LiteralPath $publishPath) {
+            Remove-Item -LiteralPath $publishPath -Recurse -Force
+        }
     }
 
     Run-Git add -A

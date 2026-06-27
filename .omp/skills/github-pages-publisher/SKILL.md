@@ -9,17 +9,18 @@ Use this skill when asked to update or refresh the GitHub Pages publishing branc
 
 ## Public Files
 
-The `gh-pages` branch should contain only:
+The `gh-pages` branch should contain only these root-level published files:
 
-- `index.html`
-- `results.csv`
-- `compare_models.py`
-- `compare_models_core.py`
-- `compare_models_template.py`
+- `index.html` from `public/index.html`
+- `results.csv` from `data/results.csv`
+- `compare_models.py` from `src/llm_comparison/compare_models.py`
+- `compare_models_core.py` from `src/llm_comparison/compare_models_core.py`
+- `compare_models_template.py` from `src/llm_comparison/compare_models_template.py`
 - `README.md`
 - `.gitignore`
 
-Do not publish `input.txt`, tests, caches, `.codex/`, `AGENTS.md`, build metadata, or other source/workspace files.
+Do not publish `data/input.txt`, `src/`, `data/`, `public/`, tests, caches,
+`.codex/`, `AGENTS.md`, build metadata, or other source/workspace files.
 
 ## Workflow
 
@@ -32,7 +33,7 @@ Run the bundled script from the repository root:
 The script:
 
 1. Detects the current source branch.
-2. If only `compare_models_template.py`, `index.html`, and/or `results.csv` are dirty, commits them first.
+2. If only `src/llm_comparison/compare_models_template.py`, `public/index.html`, and/or `data/results.csv` are dirty, commits them first.
 3. Verifies the working tree is clean.
 4. Switches to `gh-pages`, creating an orphan branch if needed.
 5. Replaces the branch contents with only the public files listed above.
@@ -40,5 +41,5 @@ The script:
 7. Pushes `gh-pages` to `origin` with upstream tracking.
 8. Switches back to the original source branch as the final step.
 
-For later updates, run the script again from the source branch after regenerating `index.html` and `results.csv`.
+For later updates, run the script again from the source branch after regenerating `public/index.html` and `data/results.csv`.
 

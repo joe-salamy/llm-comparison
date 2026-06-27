@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from compare_models_core import (
+from llm_comparison.compare_models_core import (
     FINAL_SCORE,
     Column,
     exclude_zero_price_rows,

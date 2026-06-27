@@ -7,14 +7,14 @@ requires-python = ">=3.11"
 license = "MIT"
 dependencies = []
 
-[tool.setuptools]
-py-modules = [
-    "compare_models",
-    "compare_models_core",
-    "compare_models_template",
-    "convert_results",
-    "update_artificial_analysis",
-]
+[project.scripts]
+compare-models = "llm_comparison.compare_models:main"
+convert-results = "llm_comparison.convert_results:main"
+update-artificial-analysis = "llm_comparison.update_artificial_analysis:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["llm_comparison*"]
 
 [project.optional-dependencies]
 dev = [
@@ -29,12 +29,13 @@ update = [
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+extend-exclude = [".omp"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
-"compare_models_template.py" = ["E501"]
+"src/llm_comparison/compare_models_template.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -44,3 +45,4 @@ warn_unused_configs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]

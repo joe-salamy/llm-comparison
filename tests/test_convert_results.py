@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-from convert_results import (
+from llm_comparison.convert_results import (
     clean_csv_cell,
     parse_context_window,
     parse_headers,

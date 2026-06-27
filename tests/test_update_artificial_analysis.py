@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from update_artificial_analysis import CellSnapshot, HeaderSnapshot, extract_table
+from llm_comparison.update_artificial_analysis import (
+    CellSnapshot,
+    HeaderSnapshot,
+    extract_table,
+)
 
 
 def test_action_only_column_is_dropped_without_header_name() -> None:

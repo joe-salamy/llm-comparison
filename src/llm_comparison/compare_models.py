@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from compare_models_core import (
+from .compare_models_core import (
     DEFAULT_INPUT,
     DEFAULT_OUTPUT,
     FINAL_SCORE,
@@ -22,8 +22,8 @@ from compare_models_core import (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Rank LLMs from results.csv across one or more categories and "
-            "write an interactive HTML comparison report to the repository root."
+            "Rank LLMs from data/results.csv across one or more categories and "
+            "write an interactive HTML comparison report to public/index.html."
         )
     )
     parser.add_argument(

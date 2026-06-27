@@ -6,10 +6,10 @@ import re
 from datetime import date
 from pathlib import Path
 
-DEFAULT_INPUT = Path("input.txt")
-DEFAULT_CSV = Path("results.csv")
-DEFAULT_HTML = Path("index.html")
-DEFAULT_TEMPLATE = Path("compare_models_template.py")
+DEFAULT_INPUT = Path("data/input.txt")
+DEFAULT_CSV = Path("data/results.csv")
+DEFAULT_HTML = Path("public/index.html")
+DEFAULT_TEMPLATE = Path("src/llm_comparison/compare_models_template.py")
 
 DISPLAY_TO_CSV: dict[str, str] = {
     "Model": "model",
