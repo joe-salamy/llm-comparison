@@ -27,7 +27,7 @@ Do not publish `data/input.txt`, `src/`, `data/`, `public/`, tests, caches,
 Run the bundled script from the repository root:
 
 ```powershell
-.\update-gh-pages.ps1
+python .\update-gh-pages.py
 ```
 
 The script:
