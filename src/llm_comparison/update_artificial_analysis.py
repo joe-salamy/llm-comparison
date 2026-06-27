@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import re
+import subprocess
+import sys
 import time
 from datetime import date
 from pathlib import Path
@@ -14,6 +16,7 @@ DEFAULT_URL = "https://artificialanalysis.ai/leaderboards/models"
 DEFAULT_CSV = Path("data/results.csv")
 DEFAULT_HTML = Path("public/index.html")
 DEFAULT_TEMPLATE = Path("src/llm_comparison/compare_models_template.py")
+DEFAULT_PUBLISH_SCRIPT = Path("update-gh-pages.py")
 
 
 class HeaderSnapshot(TypedDict):
@@ -116,9 +119,7 @@ def extract_table(snapshot: TableSnapshot) -> tuple[list[str], list[list[str]]]:
         if len(row) != expected_width
     ]
     if bad_rows:
-        examples = ", ".join(
-            f"row {index}: {width}" for index, width in bad_rows[:5]
-        )
+        examples = ", ".join(f"row {index}: {width}" for index, width in bad_rows[:5])
         raise ValueError(
             f"Expected {expected_width} retained columns per row; "
             f"mismatches: {examples}"
@@ -128,9 +129,7 @@ def extract_table(snapshot: TableSnapshot) -> tuple[list[str], list[list[str]]]:
 
 
 async def expand_columns(page: Any, timeout_ms: int) -> None:
-    expand_button = page.get_by_role(
-        "button", name=re.compile("Expand columns", re.I)
-    )
+    expand_button = page.get_by_role("button", name=re.compile("Expand columns", re.I))
     collapse_button = page.get_by_role(
         "button", name=re.compile("Collapse columns", re.I)
     )
@@ -211,6 +210,20 @@ async def scrape_table(
             await browser.close()
 
 
+def run_publish_script(script_path: Path) -> None:
+    root_result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        check=True,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+    )
+    repo_root = Path(root_result.stdout.strip())
+    resolved_script = (
+        script_path if script_path.is_absolute() else repo_root / script_path
+    )
+    subprocess.run([sys.executable, str(resolved_script)], cwd=repo_root, check=True)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Update Artificial Analysis leaderboard data automatically."
@@ -227,6 +240,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--headed", action="store_true")
     parser.add_argument("--timeout-ms", default=30_000, type=int)
+    parser.add_argument(
+        "--skip-publish",
+        action="store_true",
+        help="Update local data files without running update-gh-pages.py.",
+    )
+    parser.add_argument(
+        "--publish-script",
+        default=DEFAULT_PUBLISH_SCRIPT,
+        type=Path,
+        help="Path to the GitHub Pages update script, relative to the repository root.",
+    )
     return parser.parse_args()
 
 
@@ -242,6 +266,9 @@ async def async_main(args: argparse.Namespace) -> None:
     print(f"Scraped {row_count} rows and {column_count} columns from {args.url}")
     print(f"Wrote {row_count} rows to {args.csv}")
     print(f"Updated upload date in {updated_files} files")
+    if not args.skip_publish:
+        run_publish_script(args.publish_script)
+        print("Updated GitHub Pages site")
 
 
 def main() -> None:
