@@ -10,7 +10,19 @@ from datetime import date
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
-from .convert_results import build_display_header, update_upload_dates, write_table_csv
+if __package__:
+    from .convert_results import (
+        build_display_header,
+        update_upload_dates,
+        write_table_csv,
+    )
+else:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from llm_comparison.convert_results import (
+        build_display_header,
+        update_upload_dates,
+        write_table_csv,
+    )
 
 DEFAULT_URL = "https://artificialanalysis.ai/leaderboards/models"
 DEFAULT_CSV = Path("data/results.csv")

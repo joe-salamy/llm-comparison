@@ -196,3 +196,16 @@ def test_run_publish_script_resolves_relative_path_from_git_root(
         (["git", "rev-parse", "--show-toplevel"], None),
         ([sys.executable, str(repo_root / "update-gh-pages.py")], repo_root),
     ]
+
+
+def test_direct_script_execution_imports_package() -> None:
+    script_path = Path("src/llm_comparison/update_artificial_analysis.py")
+
+    result = subprocess.run(
+        [sys.executable, str(script_path), "--help"],
+        check=True,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+    )
+
+    assert "Update Artificial Analysis leaderboard data automatically." in result.stdout
