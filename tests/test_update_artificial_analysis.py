@@ -113,7 +113,7 @@ def test_async_main_runs_publish_after_data_update(
     csv_path = tmp_path / "results.csv"
     html_path = tmp_path / "index.html"
     template_path = tmp_path / "template.py"
-    publish_script = tmp_path / "update-gh-pages.py"
+    publish_script = tmp_path / "scripts/update-gh-pages.py"
     uploaded_date = date(2026, 6, 27)
 
     async def fake_scrape_table(
@@ -190,11 +190,11 @@ def test_run_publish_script_resolves_relative_path_from_git_root(
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    updater.run_publish_script(Path("update-gh-pages.py"))
+    updater.run_publish_script(Path("scripts/update-gh-pages.py"))
 
     assert calls == [
         (["git", "rev-parse", "--show-toplevel"], None),
-        ([sys.executable, str(repo_root / "update-gh-pages.py")], repo_root),
+        ([sys.executable, str(repo_root / "scripts/update-gh-pages.py")], repo_root),
     ]
 
 

@@ -28,7 +28,7 @@ DEFAULT_URL = "https://artificialanalysis.ai/leaderboards/models"
 DEFAULT_CSV = Path("data/results.csv")
 DEFAULT_HTML = Path("public/index.html")
 DEFAULT_TEMPLATE = Path("src/llm_comparison/compare_models_template.py")
-DEFAULT_PUBLISH_SCRIPT = Path("update-gh-pages.py")
+DEFAULT_PUBLISH_SCRIPT = Path("scripts/update-gh-pages.py")
 
 
 class HeaderSnapshot(TypedDict):
@@ -255,7 +255,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--skip-publish",
         action="store_true",
-        help="Update local data files without running update-gh-pages.py.",
+        help="Update local data files without running scripts/update-gh-pages.py.",
     )
     parser.add_argument(
         "--publish-script",
