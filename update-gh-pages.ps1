@@ -40,7 +40,6 @@ if ($sourceBranch -eq $PagesBranch) {
 }
 
 $generatedFiles = @(
-    ".omp/skill-usage.json",
     "compare_models_template.py",
     "index.html",
     "results.csv"
