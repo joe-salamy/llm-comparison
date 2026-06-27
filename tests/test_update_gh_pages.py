@@ -73,6 +73,26 @@ def test_status_paths_returns_renamed_destination_once() -> None:
     ) == ["public/index.html", "data/results.csv"]
 
 
+def test_generated_file_commit_preserves_porcelain_leading_status_space(
+    tmp_path: Path,
+) -> None:
+    publisher = load_publisher_module()
+    repo = tmp_path / "repo"
+    remote = tmp_path / "origin.git"
+    create_source_repo(repo, remote)
+
+    write_file(repo / "data/results.csv", "model,score\nA,2\n")
+
+    publisher.require_clean_or_commit_generated(
+        repo,
+        publisher.GENERATED_FILES,
+        "Update generated files",
+    )
+
+    assert git(repo, "status", "--porcelain") == ""
+    assert git(repo, "log", "-1", "--format=%s") == "Update generated files"
+
+
 def test_publish_writes_only_public_files_and_returns_to_source_branch(
     tmp_path: Path,
 ) -> None:

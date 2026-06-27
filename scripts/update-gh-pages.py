@@ -66,7 +66,7 @@ def run_git(
 
 
 def git_output(repo_root: Path, *args: str) -> str:
-    return run_git(repo_root, *args, capture=True).stdout.strip()
+    return run_git(repo_root, *args, capture=True).stdout.rstrip("\r\n")
 
 
 def status_paths(status_lines: Sequence[str]) -> list[str]:
