@@ -79,9 +79,11 @@ update-artificial-analysis --uploaded-date YYYY-MM-DD
 ```
 
 The updater opens the Artificial Analysis leaderboard, expands columns, reads
-the table DOM, writes `data/results.csv`, and updates the displayed data date in
+the table DOM, writes `data/results.csv`, updates the displayed data date in
 `src/llm_comparison/compare_models_template.py` and `public/index.html` when
-those files are present.
+those files are present, then runs `update-gh-pages.py` to commit the generated
+outputs and republish the GitHub Pages branch. Pass `--skip-publish` to only
+refresh the local data files.
 
 If the automated updater is unavailable, use the installed `convert-results`
 command, or run `python -m llm_comparison.convert_results`, as a manual fallback
