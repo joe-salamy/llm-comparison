@@ -86,6 +86,51 @@ def test_chart_type_uses_active_scoring_categories(tmp_path: Path) -> None:
     assert stale_chart_branch not in html
 
 
+
+def test_initial_bootstrap_applies_default_zero_price_filter(tmp_path: Path) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "free",
+            "quality": "50",
+            "blended_usd_per_1m_tokens": "0.00",
+            "_raw_values": {"quality": 50.0, "blended_usd_per_1m_tokens": 0.0},
+            FINAL_SCORE: 50.0,
+        },
+        {
+            "model": "paid",
+            "quality": "100",
+            "blended_usd_per_1m_tokens": "1.00",
+            "_raw_values": {"quality": 100.0, "blended_usd_per_1m_tokens": 1.0},
+            FINAL_SCORE: 100.0,
+        },
+    ]
+
+    write_html(
+        output,
+        rows,
+        [
+            Column("model", "Model", False),
+            Column("blended_usd_per_1m_tokens", "Price", True),
+            Column(FINAL_SCORE, "Final Score", True),
+        ],
+        ["quality"],
+        [],
+        ["quality", "blended_usd_per_1m_tokens"],
+    )
+
+    html = output.read_text(encoding="utf-8")
+    initial_render = html[
+        html.index("applyTheme(activeTheme());") : html.index(
+            'fetch("../data/results.csv")'
+        )
+    ]
+
+    assert "let excludeZeroPrice = true;" in html
+    assert "applySelection();" in initial_render
+    assert "renderTable();" not in initial_render
+    assert "drawGraph();" not in initial_render
+
 def test_3d_trend_renders_as_line_not_plane(tmp_path: Path) -> None:
     output = tmp_path / "report.html"
     rows = [

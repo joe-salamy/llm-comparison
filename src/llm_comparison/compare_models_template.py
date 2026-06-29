@@ -2626,12 +2626,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     });
     applyTheme(activeTheme());
     applyUrlOptions();
-    renderMetricPicker();
-    renderSelectedMetrics();
-    updateScoreScale();
-    updateSummary();
-    renderTable();
-    drawGraph();
+    applySelection();
 
     fetch("../data/results.csv")
       .then(response => response.ok ? response.text() : Promise.reject(new Error("../data/results.csv not found")))
