@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 from typing import Any, TypedDict, cast
@@ -236,7 +237,7 @@ def run_publish_script(script_path: Path) -> None:
     subprocess.run([sys.executable, str(resolved_script)], cwd=repo_root, check=True)
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Update Artificial Analysis leaderboard data automatically."
     )
@@ -246,7 +247,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--template", default=DEFAULT_TEMPLATE, type=Path)
     parser.add_argument(
         "--uploaded-date",
-        default=date.today(),
+        default=None,
         type=date.fromisoformat,
         help="Data upload date in YYYY-MM-DD format. Defaults to today.",
     )
@@ -263,15 +264,16 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Path to the GitHub Pages update script, relative to the repository root.",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 async def async_main(args: argparse.Namespace) -> None:
     display_headers, rows = await scrape_table(
         args.url, timeout_ms=args.timeout_ms, headed=args.headed
     )
+    uploaded_date = args.uploaded_date or date.today()
     csv_headers = write_table_csv(display_headers, rows, args.csv)
-    updated_files = update_upload_dates([args.template, args.html], args.uploaded_date)
+    updated_files = update_upload_dates([args.template, args.html], uploaded_date)
 
     row_count = len(rows)
     column_count = len(csv_headers)

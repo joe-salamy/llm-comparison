@@ -165,6 +165,53 @@ def test_async_main_runs_publish_after_data_update(
 
     assert calls == ["scrape", "write", "date", "publish"]
 
+def test_async_main_defaults_missing_uploaded_date_to_today(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    csv_path = tmp_path / "results.csv"
+    html_path = tmp_path / "index.html"
+    template_path = tmp_path / "template.py"
+    expected_date = date(2026, 6, 29)
+
+    class FixedDate(date):
+        @classmethod
+        def today(cls) -> FixedDate:
+            return cls(2026, 6, 29)
+
+    async def fake_scrape_table(
+        url: str, *, timeout_ms: int, headed: bool
+    ) -> tuple[list[str], list[list[str]]]:
+        return ["Model"], [["Claude"]]
+
+    def fake_write_table_csv(
+        display_headers: list[str], rows: list[list[str]], path: Path
+    ) -> list[str]:
+        return ["model"]
+
+    def fake_update_upload_dates(paths: list[Path], value: date) -> int:
+        assert paths == [template_path, html_path]
+        assert value == expected_date
+        return len(paths)
+
+    monkeypatch.setattr(updater, "date", FixedDate)
+    monkeypatch.setattr(updater, "scrape_table", fake_scrape_table)
+    monkeypatch.setattr(updater, "write_table_csv", fake_write_table_csv)
+    monkeypatch.setattr(updater, "update_upload_dates", fake_update_upload_dates)
+
+    args = argparse.Namespace(
+        url="https://example.com",
+        timeout_ms=123,
+        headed=False,
+        csv=csv_path,
+        template=template_path,
+        html=html_path,
+        uploaded_date=None,
+        skip_publish=True,
+        publish_script=Path("scripts/update-gh-pages.py"),
+    )
+
+    asyncio.run(updater.async_main(args))
+
 
 def test_run_publish_script_resolves_relative_path_from_git_root(
     tmp_path: Path, monkeypatch: MonkeyPatch

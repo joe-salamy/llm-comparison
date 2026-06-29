@@ -30,6 +30,19 @@ reports are written to `public/index.html` by default.
 Manual raw-copy source text lives in `data/input.txt`. Converted CSV output lives
 in `data/results.csv`.
 
+## Update and Publish
+
+Fetch the latest Artificial Analysis table, update `data/results.csv`, refresh
+the generated report date with today's date, commit generated outputs, and
+publish GitHub Pages:
+
+```powershell
+update-artificial-analysis
+```
+
+Use `--skip-publish` when you only want to refresh local data files.
+
+
 ## Compare Models
 
 Use the installed `compare-models` command, or run the module with
@@ -72,18 +85,19 @@ Common aliases include `intelligence`, `price`, `speed`, `latency`, and `respons
 
 Use the installed `update-artificial-analysis` command, or run
 `python -m llm_comparison.update_artificial_analysis`, to refresh Artificial
-Analysis data without manual clipboard selection:
+Analysis data without manual clipboard selection. The upload date defaults to
+today:
 
 ```powershell
-update-artificial-analysis --uploaded-date YYYY-MM-DD
+update-artificial-analysis
 ```
 
 The updater opens the Artificial Analysis leaderboard, expands columns, reads
 the table DOM, writes `data/results.csv`, updates the displayed data date in
 `src/llm_comparison/compare_models_template.py` and `public/index.html` when
-those files are present, then runs `scripts/update-gh-pages.py` to commit the generated
-outputs and republish the GitHub Pages branch. Pass `--skip-publish` to only
-refresh the local data files.
+those files are present, then runs `scripts/update-gh-pages.py` to commit the
+generated outputs and republish the GitHub Pages branch. Pass `--skip-publish`
+to only refresh the local data files.
 
 If the automated updater is unavailable, use the installed `convert-results`
 command, or run `python -m llm_comparison.convert_results`, as a manual fallback
