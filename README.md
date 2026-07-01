@@ -42,7 +42,6 @@ update-artificial-analysis
 
 Use `--skip-publish` when you only want to refresh local data files.
 
-
 ## Compare Models
 
 Use the installed `compare-models` command, or run the module with
