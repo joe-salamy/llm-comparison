@@ -122,7 +122,7 @@ def test_initial_bootstrap_applies_default_zero_price_filter(tmp_path: Path) -> 
     html = output.read_text(encoding="utf-8")
     initial_render = html[
         html.index("applyTheme(activeTheme());") : html.index(
-            'fetch("../data/results.csv")'
+            'fetchCsvFromPaths(["data/results.csv", "../data/results.csv"])'
         )
     ]
 

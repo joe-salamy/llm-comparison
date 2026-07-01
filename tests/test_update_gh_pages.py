@@ -113,9 +113,10 @@ def test_publish_writes_only_public_files_and_returns_to_source_branch(
         "compare_models.py",
         "compare_models_core.py",
         "compare_models_template.py",
+        "data",
         "index.html",
-        "results.csv",
     }
+    assert git(repo, "show", "gh-pages:data/results.csv") == "model,score\nA,1"
     assert git(remote, "branch", "--list", "gh-pages") == "gh-pages"
     assert (repo / "scratch_ignored/secret.txt").read_text(
         encoding="utf-8"

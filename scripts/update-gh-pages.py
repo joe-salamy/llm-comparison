@@ -27,7 +27,7 @@ class PublicFile:
 
 PUBLIC_FILES = (
     PublicFile("public/index.html", "index.html"),
-    PublicFile("data/results.csv", "results.csv"),
+    PublicFile("data/results.csv", "data/results.csv"),
     PublicFile("src/llm_comparison/compare_models.py", "compare_models.py"),
     PublicFile("src/llm_comparison/compare_models_core.py", "compare_models_core.py"),
     PublicFile(
@@ -164,7 +164,7 @@ def publish_files(
         if source_path != destination_path:
             source_path.replace(destination_path)
 
-    for path_name in ("src", "public", "data"):
+    for path_name in ("src", "public"):
         publish_path = repo_root / path_name
         if publish_path.exists():
             shutil.rmtree(publish_path)
