@@ -46,7 +46,7 @@ def create_source_repo(repo: Path, remote: Path) -> None:
         "src/llm_comparison/compare_models_core.py": "CORE = True\n",
         "src/llm_comparison/compare_models_template.py": "TEMPLATE = True\n",
         "README.md": "# Project\n",
-        ".gitignore": "__pycache__/\n",
+        ".gitignore": "__pycache__/\n.pytest_cache/\nscratch_ignored/\n",
     }
     for relative_path, content in public_sources.items():
         write_file(repo / relative_path, content)
@@ -100,6 +100,9 @@ def test_publish_writes_only_public_files_and_returns_to_source_branch(
     repo = tmp_path / "repo"
     remote = tmp_path / "origin.git"
     create_source_repo(repo, remote)
+    write_file(repo / "scratch_ignored/secret.txt", "local secret\n")
+    write_file(repo / "__pycache__/local.pyc", "local cache\n")
+    write_file(repo / ".pytest_cache/CACHEDIR.TAG", "local pytest cache\n")
 
     publisher.publish(repo_root=repo)
 
@@ -114,3 +117,14 @@ def test_publish_writes_only_public_files_and_returns_to_source_branch(
         "results.csv",
     }
     assert git(remote, "branch", "--list", "gh-pages") == "gh-pages"
+    assert (repo / "scratch_ignored/secret.txt").read_text(
+        encoding="utf-8"
+    ) == "local secret\n"
+    assert (repo / "__pycache__/local.pyc").read_text(
+        encoding="utf-8"
+    ) == "local cache\n"
+    assert (repo / ".pytest_cache/CACHEDIR.TAG").read_text(
+        encoding="utf-8"
+    ) == "local pytest cache\n"
+    assert git(repo, "status", "--porcelain") == ""
+    assert git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1

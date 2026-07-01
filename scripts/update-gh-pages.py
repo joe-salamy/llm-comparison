@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import shutil
 import subprocess
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -127,6 +128,28 @@ def remove_worktree_contents(repo_root: Path) -> None:
             path.unlink()
 
 
+def add_publish_worktree(
+    repo_root: Path,
+    publish_root: Path,
+    pages_branch: str,
+    source_branch: str,
+    branch_exists: bool,
+) -> None:
+    if branch_exists:
+        run_git(repo_root, "worktree", "add", str(publish_root), pages_branch)
+        return
+
+    run_git(
+        repo_root,
+        "worktree",
+        "add",
+        "--detach",
+        str(publish_root),
+        source_branch,
+    )
+    run_git(publish_root, "switch", "--orphan", pages_branch)
+
+
 def publish_files(
     repo_root: Path,
     source_branch: str,
@@ -199,26 +222,42 @@ def publish(
         == 0
     )
 
-    try:
-        if branch_exists:
-            run_git(repo_root, "switch", pages_branch)
-        else:
-            run_git(repo_root, "switch", "--orphan", pages_branch)
+    with tempfile.TemporaryDirectory(prefix="llm-comparison-gh-pages-") as temp_root:
+        publish_root = Path(temp_root) / pages_branch
+        worktree_added = False
 
-        remove_worktree_contents(repo_root)
-        publish_files(repo_root, source_branch, PUBLIC_FILES)
+        try:
+            add_publish_worktree(
+                repo_root,
+                publish_root,
+                pages_branch,
+                source_branch,
+                branch_exists,
+            )
+            worktree_added = True
 
-        run_git(repo_root, "add", "-A")
-        if not status_lines(repo_root):
-            print("No GitHub Pages changes to commit.")
-        else:
-            run_git(repo_root, "commit", "-m", commit_message)
-            print(f"Updated {pages_branch} from {source_branch}.")
+            remove_worktree_contents(publish_root)
+            publish_files(publish_root, source_branch, PUBLIC_FILES)
 
-        run_git(repo_root, "push", "-u", "origin", pages_branch)
-        print(f"Pushed {pages_branch} to origin.")
-    finally:
-        run_git(repo_root, "switch", source_branch)
+            run_git(publish_root, "add", "-A")
+            if not status_lines(publish_root):
+                print("No GitHub Pages changes to commit.")
+            else:
+                run_git(publish_root, "commit", "-m", commit_message)
+                print(f"Updated {pages_branch} from {source_branch}.")
+
+            run_git(publish_root, "push", "-u", "origin", pages_branch)
+            print(f"Pushed {pages_branch} to origin.")
+        finally:
+            if worktree_added:
+                run_git(
+                    repo_root,
+                    "worktree",
+                    "remove",
+                    "--force",
+                    str(publish_root),
+                    check=False,
+                )
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
