@@ -1029,6 +1029,14 @@ HTML_TEMPLATE = r"""<!doctype html>
         .map(item => Object.fromEntries(headers.map((header, index) => [header, item[index] ?? ""])));
     }
 
+    function fetchCsvFromPaths(paths) {
+      return paths.reduce(
+        (chain, path) => chain.catch(() => fetch(path)
+          .then(response => response.ok ? response.text() : Promise.reject(new Error(`${path} not found`)))),
+        Promise.reject()
+      );
+    }
+
     function percentileScores(values, lowerIsBetter) {
       if (values.length === 1) return [100];
       const sorted = values.map((value, index) => ({ value, index })).sort((a, b) => a.value - b.value);
@@ -2628,8 +2636,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     applyUrlOptions();
     applySelection();
 
-    fetch("../data/results.csv")
-      .then(response => response.ok ? response.text() : Promise.reject(new Error("../data/results.csv not found")))
+    fetchCsvFromPaths(["data/results.csv", "../data/results.csv"])
       .then(text => initializeFromCsv(parseCsv(text)))
       .catch(() => {
         updateScoreScale();
