@@ -303,6 +303,44 @@ def test_2d_chart_supports_zoom_pan_reset_and_zoom_number(tmp_path: Path) -> Non
     )
 
 
+
+def test_pareto_chart_styles_prioritize_optimal_when_flags_overlap(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "overlap",
+            "quality": "10",
+            "cost": "1",
+            "speed": "5",
+            "_raw_values": {"quality": 10.0, "cost": 1.0, "speed": 5.0},
+            FINAL_SCORE: 100.0,
+        }
+    ]
+
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality", "cost", "speed"],
+        [{"optimal": True, "suboptimal": True}],
+    )
+
+    html = output.read_text(encoding="utf-8")
+    optimal_label_priority = (
+        'ctx.fillStyle = point.row.pareto.optimal ? cssColor("--chart-optimal-label") '
+        ': cssColor("--chart-suboptimal-label");'
+    )
+    optimal_opacity_priority = (
+        "ctx.globalAlpha = point.row.pareto.optimal ? 0.92 : "
+        "point.row.pareto.suboptimal ? 0.78 : 0.92;"
+    )
+
+    assert '"pareto": {"optimal": true, "suboptimal": true}' in html
+    assert html.count(optimal_label_priority) == 2
+    assert optimal_opacity_priority in html
+
 def test_mobile_3d_chart_supports_touch_controls_and_fullscreen_fallback(
     tmp_path: Path,
 ) -> None:
