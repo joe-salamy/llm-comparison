@@ -1426,7 +1426,6 @@ HTML_TEMPLATE = r"""<!doctype html>
       if (row.pareto.suboptimal) return cssColor("--red");
       return cssColor("--blue");
     }
-
     function chartSection() {
       return document.getElementById("chartSection");
     }
@@ -2068,7 +2067,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         }
         for (const point of projected) {
           if (point.row.pareto.optimal || point.row.pareto.suboptimal) {
-            ctx.fillStyle = point.row.pareto.suboptimal ? cssColor("--chart-suboptimal-label") : cssColor("--chart-optimal-label");
+            ctx.fillStyle = point.row.pareto.optimal ? cssColor("--chart-optimal-label") : cssColor("--chart-suboptimal-label");
             ctx.font = "700 12px sans-serif";
             drawLaidOutLabel(
               ctx,
@@ -2460,7 +2459,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 
         for (const point of projected) {
           const radius = point.row.pareto.optimal ? 6 : 4.2;
-          ctx.globalAlpha = point.row.pareto.suboptimal ? 0.78 : 0.92;
+          ctx.globalAlpha = point.row.pareto.optimal ? 0.92 : point.row.pareto.suboptimal ? 0.78 : 0.92;
           ctx.beginPath();
           ctx.fillStyle = pointColor(point.row);
           ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
@@ -2479,7 +2478,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         const occupiedLabels = [];
         for (const point of projected) {
           if (!point.row.pareto.optimal && !point.row.pareto.suboptimal) continue;
-          ctx.fillStyle = point.row.pareto.suboptimal ? cssColor("--chart-suboptimal-label") : cssColor("--chart-optimal-label");
+          ctx.fillStyle = point.row.pareto.optimal ? cssColor("--chart-optimal-label") : cssColor("--chart-suboptimal-label");
           ctx.font = "700 12px sans-serif";
           drawLaidOutLabel(
             ctx,
