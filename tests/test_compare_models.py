@@ -292,6 +292,10 @@ def test_2d_chart_supports_zoom_pan_reset_and_zoom_number(tmp_path: Path) -> Non
         "        render();"
     )
     assert hover_clear in html
+    assert "const tapMoveTolerance = 8" in html
+    assert "function show2DTooltip(clientPoint)" in html
+    assert "if (shouldIgnoreSyntheticMouse()) return;" in html
+    assert "const wasTap = changedTouch && touchStart && !touchMoved" in html
     assert 'trackChartListener(canvas, "wheel"' in html
     assert (
         'trackChartListener(document.getElementById("resetView"), "click", reset2DView)'

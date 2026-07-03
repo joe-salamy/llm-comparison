@@ -1761,6 +1761,11 @@
       let dragging = false;
       let last = { x: 0, y: 0 };
       let pinchDistance = 0;
+      let touchStart = null;
+      let touchMoved = false;
+      let lastTouchInteractionAt = 0;
+      const tapMoveTolerance = 8;
+      const syntheticMouseIgnoreMs = 650;
 
       function current2DSpan() {
         return { x: view2D.maxX - view2D.minX, y: view2D.maxY - view2D.minY };
@@ -1883,6 +1888,41 @@
           touches[0].clientX - touches[1].clientX,
           touches[0].clientY - touches[1].clientY,
         );
+      }
+      function markTouchInteraction() {
+        lastTouchInteractionAt = Date.now();
+      }
+
+      function shouldIgnoreSyntheticMouse() {
+        return Date.now() - lastTouchInteractionAt < syntheticMouseIgnoreMs;
+      }
+
+      function nearest2DPoint(point) {
+        return (canvas._points || []).reduce((best, candidate) => {
+          const distance = Math.hypot(candidate.x - point.x, candidate.y - point.y);
+          return distance < best.distance ? { point: candidate, distance } : best;
+        }, { point: null, distance: Infinity });
+      }
+
+      function hide2DTooltip() {
+        hover = null;
+        tooltip.style.display = "none";
+      }
+
+      function show2DTooltip(clientPoint) {
+        const point = chartPoint(clientPoint);
+        const nearest = nearest2DPoint(point);
+        hover = nearest.distance < hoverRadius ? nearest.point : null;
+        canvas.style.cursor = hover ? "pointer" : "";
+        if (hover) {
+          tooltip.style.display = "block";
+          tooltip.style.left = `${clientPoint.clientX}px`;
+          tooltip.style.top = `${clientPoint.clientY}px`;
+          tooltip.innerHTML = tooltipText(hover.row, categories);
+        } else {
+          tooltip.style.display = "none";
+        }
+        render();
       }
 
       function project(row, width, height) {
@@ -2052,10 +2092,10 @@
       chartRender = render;
       const canvas = document.getElementById("chart");
       trackChartListener(canvas, "mousedown", event => {
+        if (shouldIgnoreSyntheticMouse()) return;
         dragging = true;
         last = { x: event.clientX, y: event.clientY };
-        hover = null;
-        tooltip.style.display = "none";
+        hide2DTooltip();
         canvas.style.cursor = "grabbing";
       });
       trackChartListener(window, "mouseup", () => {
@@ -2063,12 +2103,12 @@
         canvas.style.cursor = hover ? "pointer" : "";
       });
       trackChartListener(window, "mousemove", event => {
+        if (shouldIgnoreSyntheticMouse()) return;
         if (dragging) {
           const rect = canvas.getBoundingClientRect();
           pan2DBy(event.clientX - last.x, event.clientY - last.y, rect.width, rect.height);
           last = { x: event.clientX, y: event.clientY };
-          hover = null;
-          tooltip.style.display = "none";
+          hide2DTooltip();
           canvas.style.cursor = "grabbing";
           render();
           return;
@@ -2080,28 +2120,12 @@
           event.clientY >= rect.top &&
           event.clientY <= rect.bottom;
         if (!inCanvas) {
-          hover = null;
+          hide2DTooltip();
           canvas.style.cursor = "";
-          tooltip.style.display = "none";
           render();
           return;
         }
-        const point = chartPoint(event);
-        const nearest = (canvas._points || []).reduce((best, candidate) => {
-          const distance = Math.hypot(candidate.x - point.x, candidate.y - point.y);
-          return distance < best.distance ? { point: candidate, distance } : best;
-        }, { point: null, distance: Infinity });
-        hover = nearest.distance < hoverRadius ? nearest.point : null;
-        canvas.style.cursor = hover ? "pointer" : "";
-        if (hover) {
-          tooltip.style.display = "block";
-          tooltip.style.left = `${event.clientX}px`;
-          tooltip.style.top = `${event.clientY}px`;
-          tooltip.innerHTML = tooltipText(hover.row, categories);
-        } else {
-          tooltip.style.display = "none";
-        }
-        render();
+        show2DTooltip(event);
       });
       trackChartListener(canvas, "wheel", event => {
         event.preventDefault();
@@ -2113,23 +2137,36 @@
         render();
       }, { passive: false });
       trackChartListener(canvas, "touchstart", event => {
+        markTouchInteraction();
         if (event.touches.length === 1) {
+          event.preventDefault();
           dragging = true;
           last = touchPoint(event.touches[0]);
+          touchStart = last;
+          touchMoved = false;
         } else if (event.touches.length === 2) {
+          event.preventDefault();
           dragging = false;
+          touchStart = null;
+          touchMoved = true;
           pinchDistance = touchDistance(event.touches);
+          hide2DTooltip();
         }
       }, { passive: false });
       trackChartListener(canvas, "touchmove", event => {
+        markTouchInteraction();
         if (event.touches.length === 1 && dragging) {
           event.preventDefault();
           const touch = event.touches[0];
+          const next = touchPoint(touch);
+          if (touchStart && Math.hypot(next.x - touchStart.x, next.y - touchStart.y) > tapMoveTolerance) {
+            touchMoved = true;
+          }
+          if (!touchMoved) return;
           const rect = canvas.getBoundingClientRect();
-          pan2DBy(touch.clientX - last.x, touch.clientY - last.y, rect.width, rect.height);
-          last = touchPoint(touch);
-          hover = null;
-          tooltip.style.display = "none";
+          pan2DBy(next.x - last.x, next.y - last.y, rect.width, rect.height);
+          last = next;
+          hide2DTooltip();
           render();
         } else if (event.touches.length === 2) {
           event.preventDefault();
@@ -2141,26 +2178,42 @@
               y: ((event.touches[0].clientY + event.touches[1].clientY) / 2) - rect.top,
             };
             zoom2DAt(midpoint, nextDistance / pinchDistance, rect.width, rect.height);
-            hover = null;
-            tooltip.style.display = "none";
+            touchMoved = true;
+            touchStart = null;
+            hide2DTooltip();
             render();
           }
           pinchDistance = nextDistance;
         }
       }, { passive: false });
       trackChartListener(canvas, "touchend", event => {
+        markTouchInteraction();
         if (!event.touches.length) {
+          const changedTouch = event.changedTouches?.[0];
+          const wasTap = changedTouch && touchStart && !touchMoved && pinchDistance === 0;
           dragging = false;
           pinchDistance = 0;
+          touchStart = null;
+          touchMoved = false;
+          if (wasTap) {
+            event.preventDefault();
+            show2DTooltip(changedTouch);
+          }
         } else if (event.touches.length === 1) {
+          event.preventDefault();
           dragging = true;
           last = touchPoint(event.touches[0]);
+          touchStart = null;
+          touchMoved = true;
           pinchDistance = 0;
         }
-      });
+      }, { passive: false });
       trackChartListener(canvas, "touchcancel", () => {
+        markTouchInteraction();
         dragging = false;
         pinchDistance = 0;
+        touchStart = null;
+        touchMoved = false;
       });
       trackChartListener(document.getElementById("resetView"), "click", reset2DView);
       trackChartListener(window, "resize", render);
