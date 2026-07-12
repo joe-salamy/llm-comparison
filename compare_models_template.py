@@ -757,6 +757,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         </div>
         <div class="zoom-indicator" id="zoomIndicator" aria-live="polite" hidden>1.00x</div>
       </div>
+      <div class="tooltip" id="tooltip"></div>
     </section>
     <div class="table-wrap">
       <table id="resultsTable"></table>
@@ -775,7 +776,6 @@ HTML_TEMPLATE = r"""<!doctype html>
       </div>
     </section>
   </main>
-  <div class="tooltip" id="tooltip"></div>
   <script>
     const payload = __PAYLOAD__;
     const dataUpdated = "July 12, 2026";
