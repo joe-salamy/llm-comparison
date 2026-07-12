@@ -372,6 +372,11 @@ def test_mobile_3d_chart_supports_touch_controls_and_fullscreen_fallback(
     assert "pinchDistance" in html
     assert "function enterFullscreenFallback()" in html
     assert "section.requestFullscreen" in html
+    chart_section_start = html.index('<section class="chart-wrap" id="chartSection"')
+    chart_section = html[
+        chart_section_start : html.index("</section>", chart_section_start)
+    ]
+    assert '<div class="tooltip" id="tooltip"></div>' in chart_section
 
 
 def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:
