@@ -234,7 +234,21 @@ def run_publish_script(script_path: Path) -> None:
     resolved_script = (
         script_path if script_path.is_absolute() else repo_root / script_path
     )
-    subprocess.run([sys.executable, str(resolved_script)], cwd=repo_root, check=True)
+    publish_result = subprocess.run(
+        [sys.executable, str(resolved_script)],
+        cwd=repo_root,
+        check=False,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if publish_result.returncode != 0:
+        output = publish_result.stderr or publish_result.stdout
+        detail = " ".join(output.splitlines()[-3:])
+        message = "GitHub Pages publishing failed"
+        if detail:
+            message = f"{message}: {detail}"
+        raise RuntimeError(message)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -268,21 +282,37 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 async def async_main(args: argparse.Namespace) -> None:
+    stage_count = 3 if args.skip_publish else 4
+
+    print(
+        f"[1/{stage_count}] Fetching the Artificial Analysis leaderboard...",
+        flush=True,
+    )
     display_headers, rows = await scrape_table(
         args.url, timeout_ms=args.timeout_ms, headed=args.headed
     )
-    uploaded_date = args.uploaded_date or date.today()
-    csv_headers = write_table_csv(display_headers, rows, args.csv)
-    updated_files = update_upload_dates([args.template, args.html], uploaded_date)
-
     row_count = len(rows)
-    column_count = len(csv_headers)
-    print(f"Scraped {row_count} rows and {column_count} columns from {args.url}")
-    print(f"Wrote {row_count} rows to {args.csv}")
-    print(f"Updated upload date in {updated_files} files")
+    row_label = "row" if row_count == 1 else "rows"
+    column_count = len(display_headers)
+    column_label = "column" if column_count == 1 else "columns"
+    print(
+        f"      Found {row_count} {row_label} across "
+        f"{column_count} {column_label}."
+    )
+
+    print(f"[2/{stage_count}] Saving generated data...", flush=True)
+    uploaded_date = args.uploaded_date or date.today()
+    write_table_csv(display_headers, rows, args.csv)
+    updated_files = update_upload_dates([args.template, args.html], uploaded_date)
+    print(f"      Wrote {row_count} {row_label} to {args.csv}.")
+    print(f"      Updated the data date in {updated_files} files.")
+
     if not args.skip_publish:
+        print(f"[3/{stage_count}] Publishing GitHub Pages...", flush=True)
         run_publish_script(args.publish_script)
-        print("Updated GitHub Pages site")
+        print("      Published GitHub Pages.")
+
+    print(f"[{stage_count}/{stage_count}] Update complete.")
 
 
 def main() -> None:

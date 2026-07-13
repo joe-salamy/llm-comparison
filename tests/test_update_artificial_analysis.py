@@ -7,7 +7,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from pytest import MonkeyPatch
+from pytest import CaptureFixture, MonkeyPatch
 
 import llm_comparison.update_artificial_analysis as updater
 from llm_comparison.update_artificial_analysis import (
@@ -107,7 +107,9 @@ def test_image_alt_fallback_when_text_empty() -> None:
 
 
 def test_async_main_runs_publish_after_data_update(
-    tmp_path: Path, monkeypatch: MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    capsys: CaptureFixture[str],
 ) -> None:
     calls: list[str] = []
     csv_path = tmp_path / "results.csv"
@@ -122,6 +124,9 @@ def test_async_main_runs_publish_after_data_update(
         assert url == "https://example.com"
         assert timeout_ms == 123
         assert headed is True
+        assert capsys.readouterr().out == (
+            "[1/4] Fetching the Artificial Analysis leaderboard...\n"
+        )
         calls.append("scrape")
         return ["Model"], [["Claude"]]
 
@@ -164,9 +169,20 @@ def test_async_main_runs_publish_after_data_update(
     asyncio.run(updater.async_main(args))
 
     assert calls == ["scrape", "write", "date", "publish"]
+    assert capsys.readouterr().out.splitlines() == [
+        "      Found 1 row across 1 column.",
+        "[2/4] Saving generated data...",
+        f"      Wrote 1 row to {csv_path}.",
+        "      Updated the data date in 2 files.",
+        "[3/4] Publishing GitHub Pages...",
+        "      Published GitHub Pages.",
+        "[4/4] Update complete.",
+    ]
 
 def test_async_main_defaults_missing_uploaded_date_to_today(
-    tmp_path: Path, monkeypatch: MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    capsys: CaptureFixture[str],
 ) -> None:
     csv_path = tmp_path / "results.csv"
     html_path = tmp_path / "index.html"
@@ -181,6 +197,9 @@ def test_async_main_defaults_missing_uploaded_date_to_today(
     async def fake_scrape_table(
         url: str, *, timeout_ms: int, headed: bool
     ) -> tuple[list[str], list[list[str]]]:
+        assert capsys.readouterr().out == (
+            "[1/3] Fetching the Artificial Analysis leaderboard...\n"
+        )
         return ["Model"], [["Claude"]]
 
     def fake_write_table_csv(
@@ -211,6 +230,13 @@ def test_async_main_defaults_missing_uploaded_date_to_today(
     )
 
     asyncio.run(updater.async_main(args))
+    assert capsys.readouterr().out.splitlines() == [
+        "      Found 1 row across 1 column.",
+        "[2/3] Saving generated data...",
+        f"      Wrote 1 row to {csv_path}.",
+        "      Updated the data date in 2 files.",
+        "[3/3] Update complete.",
+    ]
 
 
 def test_run_publish_script_resolves_relative_path_from_git_root(
@@ -225,15 +251,19 @@ def test_run_publish_script_resolves_relative_path_from_git_root(
         check: bool,
         encoding: str | None = None,
         stdout: int | None = None,
+        stderr: int | None = None,
         cwd: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
-        assert check is True
+        assert check is (command == ["git", "rev-parse", "--show-toplevel"])
         calls.append((command, cwd))
         if command == ["git", "rev-parse", "--show-toplevel"]:
             assert encoding == "utf-8"
             assert stdout == subprocess.PIPE
             return subprocess.CompletedProcess(command, 0, stdout=f"{repo_root}\n")
-        return subprocess.CompletedProcess(command, 0, stdout="")
+        assert encoding == "utf-8"
+        assert stdout == subprocess.PIPE
+        assert stderr == subprocess.PIPE
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
