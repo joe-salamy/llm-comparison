@@ -9,6 +9,7 @@ from llm_comparison.compare_models_core import (
     Column,
     exclude_zero_price_rows,
     json_ready_rows,
+    opencode_go_payload,
     pareto_flags,
     score_rows,
     write_html,
@@ -22,6 +23,24 @@ def test_opencode_go_header_validation_requires_every_displayed_field() -> None:
                 "model",
                 "artificial_analysis_intelligence_index",
                 "opencode_go_blended_usd_per_1m_tokens",
+                "value_score",
+            ]
+        )
+
+
+def test_opencode_go_header_validation_requires_scraped_at() -> None:
+    with pytest.raises(SystemExit, match="scraped_at"):
+        validate_opencode_go_headers(
+            [
+                "model",
+                "artificial_analysis_intelligence_index",
+                "input_price_usd_per_1m_tokens",
+                "output_price_usd_per_1m_tokens",
+                "cache_read_usd_per_1m_tokens",
+                "cache_write_usd_per_1m_tokens",
+                "opencode_go_blended_usd_per_1m_tokens",
+                "long_context_blended_usd_per_1m_tokens",
+                "monthly_usage_usd",
                 "value_score",
             ]
         )
@@ -619,6 +638,7 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
             "long_context_blended_usd_per_1m_tokens": "",
             "monthly_usage_usd": "60",
             "value_score": "690.1311249137336093857832988",
+            "scraped_at": "2026-07-17T14:32:05Z",
         },
         {
             "model": "Unranked",
@@ -631,6 +651,7 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
             "long_context_blended_usd_per_1m_tokens": "",
             "monthly_usage_usd": "60",
             "value_score": "",
+            "scraped_at": "2026-07-17T14:32:05Z",
         },
     ]
     write_html(
@@ -652,6 +673,7 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
         "graphCategories",
         "sourceUrl",
         "formula",
+        "scrapedAt",
     }
     assert [column["label"] for column in go["columns"]] == [
         "Model",
@@ -665,6 +687,7 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
         "Usage",
         "Intelligence per blended $/1M tokens",
     ]
+    assert all(column["key"] != "scraped_at" for column in go["columns"])
     ranked, unranked = go["rows"]
     assert ranked["score"] == 690.1311249137336
     assert ranked["cells"]["value_score"] == {
@@ -690,8 +713,28 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
     ]
     assert go["sourceUrl"] == "https://opencode.ai/docs/go/"
     assert go["formula"] == "(7 × cached read + 2 × input + output) ÷ 10"
+    assert go["scrapedAt"] == "2026-07-17T14:32:05Z"
     assert "Ranked <\\/script>" in html
     assert "<\\/script>" in html
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [{"scraped_at": ""}],
+        [{"scraped_at": "2026-7-17T14:32:05Z"}],
+        [{"scraped_at": "2026-02-30T14:32:05Z"}],
+        [
+            {"scraped_at": "2026-07-17T14:32:05Z"},
+            {"scraped_at": "2026-07-17T14:32:06Z"},
+        ],
+    ],
+)
+def test_opencode_go_payload_rejects_invalid_freshness(
+    rows: list[dict[str, str]],
+) -> None:
+    with pytest.raises(ValueError):
+        opencode_go_payload(rows)
 
 
 def test_report_contains_semantic_navigation_and_go_bootstrap(tmp_path: Path) -> None:
@@ -720,6 +763,10 @@ def test_report_contains_semantic_navigation_and_go_bootstrap(tmp_path: Path) ->
         'fetchCsvFromPaths(["data/opencode_go.csv", "../data/opencode_go.csv"])' in html
     )
     assert "initializeGoFromCsv(parseCsv(text))" in html
+    assert 'id="dataFreshness">Data updated: July 17, 2026</div>' in html
+    assert '`OpenCode Go pricing scraped: ${payload.scrapedAt}`' in html
+    assert '[...payload.columns.map(column => column.key), "scraped_at"]' in html
+    assert "payload.scrapedAt = scrapedAt;" in html
     assert (
         "Usage and cached-write prices are displayed but excluded from the score."
         in html

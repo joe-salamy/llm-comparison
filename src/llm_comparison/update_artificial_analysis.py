@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import re
-import subprocess
 import sys
 import time
 from collections.abc import Sequence
@@ -30,7 +29,6 @@ DEFAULT_URL = "https://artificialanalysis.ai/leaderboards/models"
 DEFAULT_CSV = PROJECT_ROOT / "data/results.csv"
 DEFAULT_HTML = PROJECT_ROOT / "public/index.html"
 DEFAULT_TEMPLATE = PROJECT_ROOT / "src/llm_comparison/compare_models_template.py"
-DEFAULT_PUBLISH_SCRIPT = PROJECT_ROOT / "scripts/update-gh-pages.py"
 
 
 class HeaderSnapshot(TypedDict):
@@ -224,25 +222,6 @@ async def scrape_table(
             await browser.close()
 
 
-def run_publish_script(script_path: Path) -> None:
-    resolved_script = (
-        script_path if script_path.is_absolute() else PROJECT_ROOT / script_path
-    )
-    publish_result = subprocess.run(
-        [sys.executable, str(resolved_script)],
-        cwd=PROJECT_ROOT,
-        check=False,
-        encoding="utf-8",
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if publish_result.returncode != 0:
-        output = publish_result.stderr or publish_result.stdout
-        detail = " ".join(output.splitlines()[-3:])
-        message = "GitHub Pages publishing failed"
-        if detail:
-            message = f"{message}: {detail}"
-        raise RuntimeError(message)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -261,22 +240,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--headed", action="store_true")
     parser.add_argument("--timeout-ms", default=30_000, type=int)
-    parser.add_argument(
-        "--skip-publish",
-        action="store_true",
-        help="Update local data files without running scripts/update-gh-pages.py.",
-    )
-    parser.add_argument(
-        "--publish-script",
-        default=DEFAULT_PUBLISH_SCRIPT,
-        type=Path,
-        help="Path to the GitHub Pages update script, relative to the repository root.",
-    )
     return parser.parse_args(argv)
 
 
 async def async_main(args: argparse.Namespace) -> None:
-    stage_count = 3 if args.skip_publish else 4
+    stage_count = 3
 
     print(
         f"[1/{stage_count}] Fetching the Artificial Analysis leaderboard...",
@@ -301,10 +269,6 @@ async def async_main(args: argparse.Namespace) -> None:
     print(f"      Wrote {row_count} {row_label} to {args.csv}.")
     print(f"      Updated the data date in {updated_files} files.")
 
-    if not args.skip_publish:
-        print(f"[3/{stage_count}] Publishing GitHub Pages...", flush=True)
-        run_publish_script(args.publish_script)
-        print("      Published GitHub Pages.")
 
     print(f"[{stage_count}/{stage_count}] Update complete.")
 

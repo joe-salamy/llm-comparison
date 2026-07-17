@@ -6,21 +6,18 @@ import csv
 import re
 import sys
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import TypedDict, cast
 
-if __package__:
-    from .update_artificial_analysis import run_publish_script
-else:
+if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from llm_comparison.update_artificial_analysis import run_publish_script
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_URL = "https://opencode.ai/docs/go/"
 DEFAULT_CSV = PROJECT_ROOT / "data/opencode_go.csv"
 DEFAULT_AA_CSV = PROJECT_ROOT / "data/results.csv"
-DEFAULT_PUBLISH_SCRIPT = PROJECT_ROOT / "scripts/update-gh-pages.py"
 
 SOURCE_HEADERS = ["Model", "Input", "Output", "Cached Read", "Cached Write", "Usage"]
 CSV_COLUMNS = [
@@ -40,6 +37,7 @@ CSV_COLUMNS = [
     "opencode_go_blended_usd_per_1m_tokens",
     "long_context_blended_usd_per_1m_tokens",
     "value_score",
+    "scraped_at",
 ]
 
 AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
@@ -404,12 +402,33 @@ def enrich_rows(
     return output
 
 
+def validate_scraped_at(value: str) -> str:
+    parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+    if parsed.strftime("%Y-%m-%dT%H:%M:%SZ") != value:
+        raise ValueError(
+            "OpenCode Go scraped_at must use canonical YYYY-MM-DDTHH:MM:SSZ format"
+        )
+    return value
+
+
+def current_scraped_at() -> str:
+    return datetime.now(UTC).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def build_output_rows(
-    headers: list[str], source_rows: list[list[str]], aa_rows: list[dict[str, str]]
+    headers: list[str],
+    source_rows: list[list[str]],
+    aa_rows: list[dict[str, str]],
+    *,
+    scraped_at: str,
 ) -> list[dict[str, str]]:
-    return enrich_rows(
+    validated_scraped_at = validate_scraped_at(scraped_at)
+    rows = enrich_rows(
         collapse_price_rows(parse_source_rows(headers, source_rows)), aa_rows
     )
+    for row in rows:
+        row["scraped_at"] = validated_scraped_at
+    return rows
 
 
 def write_csv(rows: list[dict[str, str]], path: Path) -> None:
@@ -470,40 +489,28 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--aa-csv", default=DEFAULT_AA_CSV, type=Path)
     parser.add_argument("--headed", action="store_true")
     parser.add_argument("--timeout-ms", default=30_000, type=int)
-    parser.add_argument(
-        "--skip-publish",
-        action="store_true",
-        help="Update local data without running scripts/update-gh-pages.py.",
-    )
-    parser.add_argument(
-        "--publish-script",
-        default=DEFAULT_PUBLISH_SCRIPT,
-        type=Path,
-        help="Path to the GitHub Pages update script, relative to the repository root.",
-    )
     return parser.parse_args(argv)
 
 
 async def async_main(args: argparse.Namespace) -> None:
-    stage_count = 3 if args.skip_publish else 4
+    stage_count = 3
     print(f"[1/{stage_count}] Fetching OpenCode Go pricing...", flush=True)
     headers, source_rows = await scrape_table(
         args.url, timeout_ms=args.timeout_ms, headed=args.headed
     )
+    scraped_at = current_scraped_at()
     print(f"      Found {len(source_rows)} source price rows.")
 
     print(f"[2/{stage_count}] Joining Artificial Analysis intelligence...", flush=True)
     aa_rows = read_aa_rows(args.aa_csv)
-    output_rows = build_output_rows(headers, source_rows, aa_rows)
+    output_rows = build_output_rows(
+        headers, source_rows, aa_rows, scraped_at=scraped_at
+    )
 
     print(f"[3/{stage_count}] Saving generated data...", flush=True)
     write_csv(output_rows, args.csv)
     print(f"      Wrote {len(output_rows)} canonical rows to {args.csv}.")
 
-    if not args.skip_publish:
-        print(f"[4/{stage_count}] Publishing GitHub Pages...", flush=True)
-        run_publish_script(args.publish_script)
-        print("      Published GitHub Pages.")
     print(f"[{stage_count}/{stage_count}] Update complete.")
 
 

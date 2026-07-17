@@ -64,7 +64,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def validate_opencode_go_headers(headers: list[str]) -> None:
-    required_headers = {column.key for column in OPENCODE_GO_COLUMNS}
+    required_headers = {"scraped_at", *(column.key for column in OPENCODE_GO_COLUMNS)}
     missing_headers = sorted(required_headers - set(headers))
     if missing_headers:
         raise SystemExit(

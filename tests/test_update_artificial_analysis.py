@@ -7,6 +7,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import pytest
 from pytest import CaptureFixture, MonkeyPatch
 
 import llm_comparison.update_artificial_analysis as updater
@@ -106,7 +107,7 @@ def test_image_alt_fallback_when_text_empty() -> None:
     assert rows == [["Provider X"]]
 
 
-def test_async_main_runs_publish_after_data_update(
+def test_async_main_writes_data_and_date_locally(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     capsys: CaptureFixture[str],
@@ -115,7 +116,6 @@ def test_async_main_runs_publish_after_data_update(
     csv_path = tmp_path / "results.csv"
     html_path = tmp_path / "index.html"
     template_path = tmp_path / "template.py"
-    publish_script = tmp_path / "scripts/update-gh-pages.py"
     uploaded_date = date(2026, 6, 27)
 
     async def fake_scrape_table(
@@ -125,7 +125,7 @@ def test_async_main_runs_publish_after_data_update(
         assert timeout_ms == 123
         assert headed is True
         assert capsys.readouterr().out == (
-            "[1/4] Fetching the Artificial Analysis leaderboard...\n"
+            "[1/3] Fetching the Artificial Analysis leaderboard...\n"
         )
         calls.append("scrape")
         return ["Model"], [["Claude"]]
@@ -145,14 +145,9 @@ def test_async_main_runs_publish_after_data_update(
         calls.append("date")
         return len(paths)
 
-    def fake_run_publish_script(path: Path) -> None:
-        assert path == publish_script
-        calls.append("publish")
-
     monkeypatch.setattr(updater, "scrape_table", fake_scrape_table)
     monkeypatch.setattr(updater, "write_table_csv", fake_write_table_csv)
     monkeypatch.setattr(updater, "update_upload_dates", fake_update_upload_dates)
-    monkeypatch.setattr(updater, "run_publish_script", fake_run_publish_script)
 
     args = argparse.Namespace(
         url="https://example.com",
@@ -162,21 +157,17 @@ def test_async_main_runs_publish_after_data_update(
         template=template_path,
         html=html_path,
         uploaded_date=uploaded_date,
-        skip_publish=False,
-        publish_script=publish_script,
     )
 
     asyncio.run(updater.async_main(args))
 
-    assert calls == ["scrape", "write", "date", "publish"]
+    assert calls == ["scrape", "write", "date"]
     assert capsys.readouterr().out.splitlines() == [
         "      Found 1 row across 1 column.",
-        "[2/4] Saving generated data...",
+        "[2/3] Saving generated data...",
         f"      Wrote 1 row to {csv_path}.",
         "      Updated the data date in 2 files.",
-        "[3/4] Publishing GitHub Pages...",
-        "      Published GitHub Pages.",
-        "[4/4] Update complete.",
+        "[3/3] Update complete.",
     ]
 
 def test_async_main_defaults_missing_uploaded_date_to_today(
@@ -225,8 +216,6 @@ def test_async_main_defaults_missing_uploaded_date_to_today(
         template=template_path,
         html=html_path,
         uploaded_date=None,
-        skip_publish=True,
-        publish_script=Path("scripts/update-gh-pages.py"),
     )
 
     asyncio.run(updater.async_main(args))
@@ -247,41 +236,14 @@ def test_default_paths_resolve_from_project_root() -> None:
     assert args.template == (
         updater.PROJECT_ROOT / "src/llm_comparison/compare_models_template.py"
     )
-    assert args.publish_script == (
-        updater.PROJECT_ROOT / "scripts/update-gh-pages.py"
-    )
 
 
-def test_run_publish_script_resolves_relative_path_from_project_root(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    repo_root = tmp_path / "repo"
-    calls: list[tuple[list[str], Path | None]] = []
 
-    def fake_run(
-        command: list[str],
-        *,
-        check: bool,
-        encoding: str | None = None,
-        stdout: int | None = None,
-        stderr: int | None = None,
-        cwd: Path | None = None,
-    ) -> subprocess.CompletedProcess[str]:
-        assert check is False
-        assert encoding == "utf-8"
-        assert stdout == subprocess.PIPE
-        assert stderr == subprocess.PIPE
-        calls.append((command, cwd))
-        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
-    monkeypatch.setattr(updater, "PROJECT_ROOT", repo_root)
-    monkeypatch.setattr(subprocess, "run", fake_run)
-
-    updater.run_publish_script(Path("scripts/update-gh-pages.py"))
-
-    assert calls == [
-        ([sys.executable, str(repo_root / "scripts/update-gh-pages.py")], repo_root),
-    ]
+@pytest.mark.parametrize("option", ["--skip-publish", "--publish-script"])
+def test_publication_options_are_rejected(option: str) -> None:
+    with pytest.raises(SystemExit):
+        updater.parse_args([option])
 
 
 def test_direct_script_execution_imports_package() -> None:

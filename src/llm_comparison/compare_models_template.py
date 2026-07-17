@@ -712,7 +712,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       <div>
         <h1 id="pageTitle">LLM Comparison</h1>
         <div class="meta-stack">
-          <div class="meta">Data updated: July 17, 2026</div>
+          <div class="meta" id="dataFreshness">Data updated: July 17, 2026</div>
           <div class="meta" id="summary"></div>
         </div>
       </div>
@@ -839,7 +839,11 @@ HTML_TEMPLATE = r"""<!doctype html>
     };
     const isOpenCodeGoView =
       new URLSearchParams(window.location.search).get("view") === "opencode-go";
-    if (isOpenCodeGoView) Object.assign(payload, payload.openCodeGo);
+    if (isOpenCodeGoView) {
+      Object.assign(payload, payload.openCodeGo);
+      document.getElementById("dataFreshness").textContent =
+        `OpenCode Go pricing scraped: ${payload.scrapedAt}`;
+    }
     document.getElementById(isOpenCodeGoView ? "openCodeGoViewLink" : "comparisonViewLink")
       .setAttribute("aria-current", "page");
     if (isOpenCodeGoView) {
@@ -1409,11 +1413,24 @@ HTML_TEMPLATE = r"""<!doctype html>
 
     function initializeGoFromCsv(csvRows) {
       const headers = new Set(Object.keys(csvRows[0] || {}));
-      const required = payload.columns.map(column => column.key);
+      const required = [...payload.columns.map(column => column.key), "scraped_at"];
       const missing = required.filter(key => !headers.has(key));
       if (!csvRows.length || missing.length) {
         throw new Error(`OpenCode Go CSV is missing required headers: ${missing.join(", ")}`);
       }
+      const scrapedValues = csvRows.map(row => String(row.scraped_at || "").trim());
+      const canonicalScrapedAt = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+      if (scrapedValues.some(value => {
+        if (!canonicalScrapedAt.test(value)) return true;
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ||
+          parsed.toISOString().replace(".000Z", "Z") !== value;
+      }) || new Set(scrapedValues).size !== 1) {
+        throw new Error(
+          "OpenCode Go CSV scraped_at values must be identical canonical UTC timestamps"
+        );
+      }
+      const scrapedAt = scrapedValues[0];
       const loadedRows = csvRows.map(raw => {
         const intelligence = parseNumber(raw[goIntelligenceKey]);
         const blend = parseNumber(raw[goBlendKey]);
@@ -1450,6 +1467,9 @@ HTML_TEMPLATE = r"""<!doctype html>
       });
       rows = loadedRows;
       payload.rows = loadedRows;
+      payload.scrapedAt = scrapedAt;
+      document.getElementById("dataFreshness").textContent =
+        `OpenCode Go pricing scraped: ${scrapedAt}`;
       sortState = { key: goValueKey, direction: "desc" };
       updateScoreScale();
       updateSummary();

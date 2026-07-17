@@ -5,6 +5,7 @@ import json
 import math
 import statistics
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -409,6 +410,22 @@ def json_ready_rows(
 
 
 def opencode_go_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
+    scraped_at = ""
+    if rows:
+        scraped_values = {row.get("scraped_at", "").strip() for row in rows}
+        if "" in scraped_values or len(scraped_values) != 1:
+            raise ValueError(
+                "OpenCode Go rows must contain one identical non-empty scraped_at value"
+            )
+        scraped_at = scraped_values.pop()
+        parsed_scraped_at = datetime.strptime(
+            scraped_at, "%Y-%m-%dT%H:%M:%SZ"
+        )
+        if parsed_scraped_at.strftime("%Y-%m-%dT%H:%M:%SZ") != scraped_at:
+            raise ValueError(
+                "OpenCode Go scraped_at must use canonical YYYY-MM-DDTHH:MM:SSZ format"
+            )
+
     graph_categories = [OPENCODE_GO_INTELLIGENCE, OPENCODE_GO_BLEND]
     prepared: list[dict[str, Any]] = []
     ranked_positions: list[int] = []
@@ -455,6 +472,7 @@ def opencode_go_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
             },
         ],
         "graphCategories": graph_categories,
+        "scrapedAt": scraped_at,
         "sourceUrl": "https://opencode.ai/docs/go/",
         "formula": "(7 × cached read + 2 × input + output) ÷ 10",
     }

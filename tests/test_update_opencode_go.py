@@ -15,6 +15,7 @@ from pytest import MonkeyPatch
 import llm_comparison.update_opencode_go as updater
 
 HEADERS = ["Model", "Input", "Output", "Cached Read", "Cached Write", "Usage"]
+SCRAPED_AT = "2026-07-17T14:32:05Z"
 SOURCE_ROWS = [
     ["Grok 4.5", "$2.00", "$6.00", "$0.50", "-", "$15"],
     ["GLM-5.2", "$1.40", "$4.40", "$0.26", "-", "$60"],
@@ -65,7 +66,9 @@ AA_ROWS = [
 
 
 def output_rows() -> list[dict[str, str]]:
-    return updater.build_output_rows(HEADERS, SOURCE_ROWS, AA_ROWS)
+    return updater.build_output_rows(
+        HEADERS, SOURCE_ROWS, AA_ROWS, scraped_at=SCRAPED_AT
+    )
 
 
 def by_model(rows: list[dict[str, str]], model: str) -> dict[str, str]:
@@ -136,7 +139,9 @@ def test_usage_does_not_change_blend_value_or_rank() -> None:
     rows = output_rows()
     changed_source = [row.copy() for row in SOURCE_ROWS]
     changed_source[-1][-1] = "$999"
-    changed = updater.build_output_rows(HEADERS, changed_source, AA_ROWS)
+    changed = updater.build_output_rows(
+        HEADERS, changed_source, AA_ROWS, scraped_at=SCRAPED_AT
+    )
     original_scores = sorted(
         ((row["model"], row["value_score"]) for row in rows),
         key=lambda item: item[1],
@@ -227,10 +232,13 @@ def test_csv_columns_and_order_are_deterministic(tmp_path: Path) -> None:
     updater.write_csv(output_rows(), path)
     with path.open(newline="", encoding="utf-8") as input_file:
         reader = csv.DictReader(input_file)
+        csv_rows = list(reader)
         assert reader.fieldnames == updater.CSV_COLUMNS
-        assert [row["model"] for row in reader] == [
+        assert reader.fieldnames[-1] == "scraped_at"
+        assert [row["model"] for row in csv_rows] == [
             row["model"] for row in output_rows()
         ]
+        assert {row["scraped_at"] for row in csv_rows} == {SCRAPED_AT}
 
 
 def test_default_paths_resolve_from_repository_root() -> None:
@@ -238,10 +246,37 @@ def test_default_paths_resolve_from_repository_root() -> None:
     assert args.url == "https://opencode.ai/docs/go/"
     assert args.csv == updater.PROJECT_ROOT / "data/opencode_go.csv"
     assert args.aa_csv == updater.PROJECT_ROOT / "data/results.csv"
-    assert args.publish_script == updater.PROJECT_ROOT / "scripts/update-gh-pages.py"
 
 
-def test_async_main_writes_only_after_validation_and_publishes_last(
+@pytest.mark.parametrize("option", ["--skip-publish", "--publish-script"])
+def test_publication_options_are_rejected(option: str) -> None:
+    with pytest.raises(SystemExit):
+        updater.parse_args([option])
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "2026-07-17",
+        "2026-7-17T14:32:05Z",
+        "2026-07-17T14:32:05+00:00",
+        "2026-02-30T14:32:05Z",
+    ],
+)
+def test_validate_scraped_at_rejects_noncanonical_or_invalid_values(value: str) -> None:
+    with pytest.raises(ValueError):
+        updater.validate_scraped_at(value)
+
+
+def test_build_output_rows_applies_one_scrape_timestamp_to_every_row() -> None:
+    rows = output_rows()
+
+    assert updater.validate_scraped_at(SCRAPED_AT) == SCRAPED_AT
+    assert {row["scraped_at"] for row in rows} == {SCRAPED_AT}
+
+
+def test_async_main_writes_only_after_validation(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     aa_path = tmp_path / "results.csv"
@@ -266,22 +301,23 @@ def test_async_main_writes_only_after_validation_and_publishes_last(
         calls.append("write")
         original_write(rows, path)
 
+    def fake_current_scraped_at() -> str:
+        calls.append("clock")
+        return SCRAPED_AT
+
+
     monkeypatch.setattr(updater, "scrape_table", fake_scrape)
+    monkeypatch.setattr(updater, "current_scraped_at", fake_current_scraped_at)
     monkeypatch.setattr(updater, "write_csv", fake_write)
-    monkeypatch.setattr(
-        updater, "run_publish_script", lambda path: calls.append("publish")
-    )
     args = argparse.Namespace(
         url="example",
         csv=csv_path,
         aa_csv=aa_path,
         headed=False,
         timeout_ms=1,
-        skip_publish=False,
-        publish_script=tmp_path / "publish.py",
     )
     asyncio.run(updater.async_main(args))
-    assert calls == ["scrape", "write", "publish"]
+    assert calls == ["scrape", "clock", "write"]
     assert len(updater.read_aa_rows(csv_path)) == 16
 
 
@@ -305,12 +341,41 @@ def test_failed_join_preserves_existing_output(
         aa_csv=aa_path,
         headed=False,
         timeout_ms=1,
-        skip_publish=True,
-        publish_script=tmp_path / "publish.py",
     )
     with pytest.raises(RuntimeError):
         asyncio.run(updater.async_main(args))
     assert output.read_text(encoding="utf-8") == "old data\n"
+
+def test_invalid_scraped_at_preserves_existing_output(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    output = tmp_path / "opencode_go.csv"
+    output.write_text("old data\n", encoding="utf-8")
+    aa_path = tmp_path / "results.csv"
+    aa_path.write_text(
+        "model,artificial_analysis_intelligence_index\nA,1\n", encoding="utf-8"
+    )
+
+    async def fake_scrape(
+        url: str, *, timeout_ms: int, headed: bool
+    ) -> tuple[list[str], list[list[str]]]:
+        return HEADERS, SOURCE_ROWS
+
+    monkeypatch.setattr(updater, "scrape_table", fake_scrape)
+    monkeypatch.setattr(updater, "current_scraped_at", lambda: "invalid")
+    args = argparse.Namespace(
+        url="example",
+        csv=output,
+        aa_csv=aa_path,
+        headed=False,
+        timeout_ms=1,
+    )
+
+    with pytest.raises(ValueError):
+        asyncio.run(updater.async_main(args))
+
+    assert output.read_text(encoding="utf-8") == "old data\n"
+
 
 
 def test_direct_script_help_execution() -> None:
@@ -419,8 +484,6 @@ def test_failed_scrape_preserves_existing_output(
         aa_csv=aa_path,
         headed=False,
         timeout_ms=1,
-        skip_publish=True,
-        publish_script=tmp_path / "publish.py",
     )
     with pytest.raises(RuntimeError, match="source unavailable"):
         asyncio.run(updater.async_main(args))
