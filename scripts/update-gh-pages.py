@@ -16,6 +16,7 @@ GENERATED_FILES = (
     "src/llm_comparison/compare_models_template.py",
     "public/index.html",
     "data/results.csv",
+    "data/opencode_go.csv",
 )
 
 
@@ -28,6 +29,7 @@ class PublicFile:
 PUBLIC_FILES = (
     PublicFile("public/index.html", "index.html"),
     PublicFile("data/results.csv", "data/results.csv"),
+    PublicFile("data/opencode_go.csv", "data/opencode_go.csv"),
     PublicFile("src/llm_comparison/compare_models.py", "compare_models.py"),
     PublicFile("src/llm_comparison/compare_models_core.py", "compare_models_core.py"),
     PublicFile(
@@ -106,8 +108,7 @@ def require_clean_or_commit_generated(
         if unexpected_paths:
             paths = ", ".join(unexpected_paths)
             raise PublishError(
-                "Working tree has changes outside generated analysis files: "
-                f"{paths}"
+                f"Working tree has changes outside generated analysis files: {paths}"
             )
 
         run_git(repo_root, "add", "--", *generated_files)

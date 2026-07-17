@@ -1,5 +1,9 @@
+import json
 from pathlib import Path
 
+import pytest
+
+from llm_comparison.compare_models import validate_opencode_go_headers
 from llm_comparison.compare_models_core import (
     FINAL_SCORE,
     Column,
@@ -9,6 +13,18 @@ from llm_comparison.compare_models_core import (
     score_rows,
     write_html,
 )
+
+
+def test_opencode_go_header_validation_requires_every_displayed_field() -> None:
+    with pytest.raises(SystemExit, match="monthly_usage_usd"):
+        validate_opencode_go_headers(
+            [
+                "model",
+                "artificial_analysis_intelligence_index",
+                "opencode_go_blended_usd_per_1m_tokens",
+                "value_score",
+            ]
+        )
 
 
 def test_pareto_flags_stay_aligned_for_duplicate_model_names() -> None:
@@ -86,7 +102,6 @@ def test_chart_type_uses_active_scoring_categories(tmp_path: Path) -> None:
     assert stale_chart_branch not in html
 
 
-
 def test_initial_bootstrap_applies_default_zero_price_filter(tmp_path: Path) -> None:
     output = tmp_path / "report.html"
     rows = [
@@ -130,6 +145,7 @@ def test_initial_bootstrap_applies_default_zero_price_filter(tmp_path: Path) -> 
     assert "applySelection();" in initial_render
     assert "renderTable();" not in initial_render
     assert "drawGraph();" not in initial_render
+
 
 def test_3d_trend_renders_as_line_not_plane(tmp_path: Path) -> None:
     output = tmp_path / "report.html"
@@ -277,8 +293,7 @@ def test_2d_chart_supports_zoom_pan_reset_and_zoom_number(tmp_path: Path) -> Non
     assert ".chart-wrap.is-2d .zoom-indicator {\n      top: 12px;\n    }" in html
     assert (
         "const initial2DView = { minX: ranges[0].min, maxX: ranges[0].max, "
-        "minY: ranges[1].min, maxY: ranges[1].max, zoom: 1 }"
-        in html
+        "minY: ranges[1].min, maxY: ranges[1].max, zoom: 1 }" in html
     )
     assert "function reset2DView()" in html
     assert "function update2DZoomIndicator()" in html
@@ -286,10 +301,9 @@ def test_2d_chart_supports_zoom_pan_reset_and_zoom_number(tmp_path: Path) -> Non
     assert "function zoom2DAt(" in html
     assert "function pan2DBy(" in html
     assert "function pointIn2DView(row)" in html
-    assert "payload.rows.filter(pointIn2DView).map" in html
+    assert "plottableRows(categories).filter(pointIn2DView).map" in html
     hover_clear = (
-        'hover = null;\n        tooltip.style.display = "none";\n'
-        "        render();"
+        'hover = null;\n        tooltip.style.display = "none";\n        render();'
     )
     assert hover_clear in html
     assert "const tapMoveTolerance = 8" in html
@@ -301,7 +315,6 @@ def test_2d_chart_supports_zoom_pan_reset_and_zoom_number(tmp_path: Path) -> Non
         'trackChartListener(document.getElementById("resetView"), "click", reset2DView)'
         in html
     )
-
 
 
 def test_pareto_chart_styles_prioritize_optimal_when_flags_overlap(
@@ -340,6 +353,7 @@ def test_pareto_chart_styles_prioritize_optimal_when_flags_overlap(
     assert '"pareto": {"optimal": true, "suboptimal": true}' in html
     assert html.count(optimal_label_priority) == 2
     assert optimal_opacity_priority in html
+
 
 def test_mobile_3d_chart_supports_touch_controls_and_fullscreen_fallback(
     tmp_path: Path,
@@ -405,7 +419,6 @@ def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:
     assert "function orderedValidMetricKeys(keys)" in html
     assert 'url.searchParams.set("metrics", selectedCategories.join(","))' in html
     assert "applySelection({ syncUrl: true })" in html
-
 
 
 def test_report_can_reset_to_original_metric_selection(tmp_path: Path) -> None:
@@ -482,8 +495,7 @@ def test_metric_filter_selection_redraws_chart_and_toggles_chart_controls(
     ]
     for element_id in hidden_3d_controls:
         assert (
-            f'document.getElementById("{element_id}").hidden = '
-            "categories.length !== 3"
+            f'document.getElementById("{element_id}").hidden = categories.length !== 3'
         ) in html
 
 
@@ -570,12 +582,152 @@ def test_exclude_zero_price_changes_percentile_scores(tmp_path: Path) -> None:
     scored_with_free = score_rows(rows, ["quality"])
     scored_without_free = score_rows(exclude_zero_price_rows(rows), ["quality"])
 
-    with_free_scores = {
-        row["model"]: row[FINAL_SCORE] for row in scored_with_free
-    }
+    with_free_scores = {row["model"]: row[FINAL_SCORE] for row in scored_with_free}
     without_free_scores = {
         row["model"]: row[FINAL_SCORE] for row in scored_without_free
     }
     assert "free" not in without_free_scores
     assert with_free_scores["mid"] != without_free_scores["mid"]
     assert without_free_scores["top"] == 100.0
+
+
+def embedded_payload(html: str) -> dict[str, object]:
+    start = html.index("const payload = ") + len("const payload = ")
+    end = html.index(";\n    const dataUpdated", start)
+    return json.loads(html[start:end])
+
+
+def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None:
+    output = tmp_path / "report.html"
+    comparison_rows = [
+        {
+            "model": "comparison",
+            "quality": "1",
+            "_raw_values": {"quality": 1.0},
+            FINAL_SCORE: 100.0,
+        }
+    ]
+    go_rows = [
+        {
+            "model": "Ranked </script>",
+            "artificial_analysis_intelligence_index": "40",
+            "input_price_usd_per_1m_tokens": "0.14",
+            "output_price_usd_per_1m_tokens": "0.28",
+            "cache_read_usd_per_1m_tokens": "0.0028",
+            "cache_write_usd_per_1m_tokens": "",
+            "opencode_go_blended_usd_per_1m_tokens": "0.05796",
+            "long_context_blended_usd_per_1m_tokens": "",
+            "monthly_usage_usd": "60",
+            "value_score": "690.1311249137336093857832988",
+        },
+        {
+            "model": "Unranked",
+            "artificial_analysis_intelligence_index": "",
+            "input_price_usd_per_1m_tokens": "0.30",
+            "output_price_usd_per_1m_tokens": "1.20",
+            "cache_read_usd_per_1m_tokens": "0.06",
+            "cache_write_usd_per_1m_tokens": "0.375",
+            "opencode_go_blended_usd_per_1m_tokens": "0.222",
+            "long_context_blended_usd_per_1m_tokens": "",
+            "monthly_usage_usd": "60",
+            "value_score": "",
+        },
+    ]
+    write_html(
+        output,
+        comparison_rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality"],
+        [],
+        opencode_go_rows=go_rows,
+    )
+
+    html = output.read_text(encoding="utf-8")
+    payload = embedded_payload(html)
+    go = payload["openCodeGo"]
+    assert set(go) == {
+        "columns",
+        "rows",
+        "categories",
+        "graphCategories",
+        "sourceUrl",
+        "formula",
+    }
+    assert [column["label"] for column in go["columns"]] == [
+        "Model",
+        "Artificial Analysis Intelligence Index",
+        "Input",
+        "Output",
+        "Cached Read",
+        "Cached Write",
+        "Blended Price",
+        ">256K Blended Price",
+        "Usage",
+        "Intelligence per blended $/1M tokens",
+    ]
+    ranked, unranked = go["rows"]
+    assert ranked["score"] == 690.1311249137336
+    assert ranked["cells"]["value_score"] == {
+        "display": "690.13",
+        "sort": 690.1311249137336,
+    }
+    assert (
+        ranked["cells"]["opencode_go_blended_usd_per_1m_tokens"]["display"]
+        == "$0.05796"
+    )
+    assert ranked["cells"]["monthly_usage_usd"]["display"] == "$60"
+    assert unranked["score"] is None
+    assert (
+        unranked["cells"]["artificial_analysis_intelligence_index"]["display"]
+        == "Unranked"
+    )
+    assert unranked["cells"]["value_score"]["display"] == "Unranked"
+    assert unranked["graph"] == {}
+    assert unranked["pareto"] == {"optimal": False, "suboptimal": False}
+    assert go["graphCategories"] == [
+        "artificial_analysis_intelligence_index",
+        "opencode_go_blended_usd_per_1m_tokens",
+    ]
+    assert go["sourceUrl"] == "https://opencode.ai/docs/go/"
+    assert go["formula"] == "(7 × cached read + 2 × input + output) ÷ 10"
+    assert "Ranked <\\/script>" in html
+    assert "<\\/script>" in html
+
+
+def test_report_contains_semantic_navigation_and_go_bootstrap(tmp_path: Path) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "one",
+            "quality": "1",
+            "_raw_values": {"quality": 1.0},
+            FINAL_SCORE: 100.0,
+        }
+    ]
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality"],
+        [],
+    )
+    html = output.read_text(encoding="utf-8")
+    assert '<nav class="view-nav" aria-label="Report views">' in html
+    assert 'href="./index.html">Comparison</a>' in html
+    assert 'href="?view=opencode-go">OpenCode Go value</a>' in html
+    assert 'get("view") === "opencode-go"' in html
+    assert (
+        'fetchCsvFromPaths(["data/opencode_go.csv", "../data/opencode_go.csv"])' in html
+    )
+    assert "initializeGoFromCsv(parseCsv(text))" in html
+    assert (
+        "Usage and cached-write prices are displayed but excluded from the score."
+        in html
+    )
+    go_bootstrap = html[
+        html.index(
+            "if (isOpenCodeGoView) {", html.index("applyTheme(activeTheme());")
+        ) :
+    ]
+    assert "initializeEmbeddedGo();" in go_bootstrap
+    assert "applySelection();" not in go_bootstrap.split("} else {", 1)[0]

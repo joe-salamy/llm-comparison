@@ -42,6 +42,7 @@ def create_source_repo(repo: Path, remote: Path) -> None:
     public_sources = {
         "public/index.html": "<h1>report</h1>\n",
         "data/results.csv": "model,score\nA,1\n",
+        "data/opencode_go.csv": "model,value_score\nGo,2\n",
         "src/llm_comparison/compare_models.py": "print('compare')\n",
         "src/llm_comparison/compare_models_core.py": "CORE = True\n",
         "src/llm_comparison/compare_models_template.py": "TEMPLATE = True\n",
@@ -82,6 +83,7 @@ def test_generated_file_commit_preserves_porcelain_leading_status_space(
     create_source_repo(repo, remote)
 
     write_file(repo / "data/results.csv", "model,score\nA,2\n")
+    write_file(repo / "data/opencode_go.csv", "model,value_score\nGo,3\n")
 
     publisher.require_clean_or_commit_generated(
         repo,
@@ -117,6 +119,9 @@ def test_publish_writes_only_public_files_and_returns_to_source_branch(
         "index.html",
     }
     assert git(repo, "show", "gh-pages:data/results.csv") == "model,score\nA,1"
+    assert git(repo, "show", "gh-pages:data/opencode_go.csv") == (
+        "model,value_score\nGo,2"
+    )
     assert git(remote, "branch", "--list", "gh-pages") == "gh-pages"
     assert (repo / "scratch_ignored/secret.txt").read_text(
         encoding="utf-8"

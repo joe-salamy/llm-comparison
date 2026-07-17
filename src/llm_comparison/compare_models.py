@@ -7,6 +7,7 @@ from .compare_models_core import (
     DEFAULT_INPUT,
     DEFAULT_OUTPUT,
     FINAL_SCORE,
+    OPENCODE_GO_COLUMNS,
     exclude_zero_price_rows,
     list_categories,
     numeric_columns,
@@ -37,6 +38,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", default=DEFAULT_INPUT, type=Path)
     parser.add_argument("--output", default=DEFAULT_OUTPUT, type=Path)
     parser.add_argument(
+        "--opencode-go-input",
+        default=Path("data/opencode_go.csv"),
+        type=Path,
+    )
+    parser.add_argument(
         "--all-columns",
         action="store_true",
         help="Include all CSV columns in the final table instead of the main columns.",
@@ -55,6 +61,16 @@ def parse_args() -> argparse.Namespace:
         help="List available numeric scoring categories and aliases, then exit.",
     )
     return parser.parse_args()
+
+
+def validate_opencode_go_headers(headers: list[str]) -> None:
+    required_headers = {column.key for column in OPENCODE_GO_COLUMNS}
+    missing_headers = sorted(required_headers - set(headers))
+    if missing_headers:
+        raise SystemExit(
+            "OpenCode Go input CSV is missing required headers: "
+            + ", ".join(missing_headers)
+        )
 
 
 def main() -> None:
@@ -81,6 +97,10 @@ def main() -> None:
     pareto = pareto_flags(scored_rows, categories) if len(categories) in {2, 3} else []
     columns = table_columns(headers, numeric | {FINAL_SCORE}, args.all_columns)
     available_categories = [header for header in headers if header in numeric]
+    if not args.opencode_go_input.is_file():
+        raise SystemExit(f"OpenCode Go input CSV not found: {args.opencode_go_input}")
+    opencode_go_headers, opencode_go_rows = read_rows(args.opencode_go_input)
+    validate_opencode_go_headers(opencode_go_headers)
     write_html(
         args.output,
         scored_rows,
@@ -88,6 +108,7 @@ def main() -> None:
         categories,
         pareto,
         available_categories,
+        opencode_go_rows,
     )
 
     print(f"Wrote {len(scored_rows)} ranked rows to {args.output}")

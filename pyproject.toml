@@ -11,6 +11,7 @@ dependencies = []
 compare-models = "llm_comparison.compare_models:main"
 convert-results = "llm_comparison.convert_results:main"
 update-artificial-analysis = "llm_comparison.update_artificial_analysis:main"
+update-opencode-go = "llm_comparison.update_opencode_go:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
