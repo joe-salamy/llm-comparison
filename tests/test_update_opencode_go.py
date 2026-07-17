@@ -90,7 +90,7 @@ def test_exact_table_collapses_to_sixteen_rows_and_calculates_examples() -> None
     assert flash["artificial_analysis_model"] == "DeepSeek V4 Flash (max)"
     assert flash["artificial_analysis_intelligence_index"] == "40"
     assert flash["opencode_go_blended_usd_per_1m_tokens"] == "0.05796"
-    assert float(flash["value_score"]) == pytest.approx(690.131, rel=1e-6)
+    assert float(flash["value_score"]) == pytest.approx(52.3687162320)
 
     qwen = by_model(rows, "Qwen3.7 Plus")
     assert qwen["long_context_threshold_tokens"] == "256000"
@@ -151,6 +151,46 @@ def test_usage_does_not_change_blend_value_or_rank() -> None:
         key=lambda item: item[1],
     )
     assert original_scores == changed_scores
+
+
+@pytest.mark.parametrize(
+    ("intelligence", "price", "expected"),
+    [
+        (Decimal("50"), Decimal("1"), Decimal("50")),
+        (Decimal("50"), Decimal("10"), Decimal("40")),
+        (Decimal("50"), Decimal("0.1"), Decimal("60")),
+        (Decimal("0"), Decimal("1"), Decimal("0")),
+    ],
+)
+def test_cost_adjusted_intelligence_logarithmic_anchors(
+    intelligence: Decimal, price: Decimal, expected: Decimal
+) -> None:
+    assert updater.cost_adjusted_intelligence(intelligence, price) == expected
+
+
+def test_cost_adjusted_intelligence_has_balanced_exchange_rate() -> None:
+    assert updater.cost_adjusted_intelligence(
+        Decimal("50"), Decimal("1")
+    ) == updater.cost_adjusted_intelligence(Decimal("60"), Decimal("10"))
+
+
+@pytest.mark.parametrize(
+    "intelligence", [Decimal("-1"), Decimal("NaN"), Decimal("Infinity")]
+)
+def test_invalid_intelligence_is_rejected(intelligence: Decimal) -> None:
+    with pytest.raises(
+        RuntimeError,
+        match="OpenCode Go intelligence must be finite and non-negative",
+    ):
+        updater.cost_adjusted_intelligence(intelligence, Decimal("1"))
+
+
+def test_metric_does_not_reward_low_intelligence_for_low_price() -> None:
+    kimi_k3 = updater.cost_adjusted_intelligence(Decimal("57"), Decimal("2.31"))
+    mimo_v25 = updater.cost_adjusted_intelligence(
+        Decimal("37"), Decimal("0.05796")
+    )
+    assert kimi_k3 > mimo_v25
 
 
 @pytest.mark.parametrize(

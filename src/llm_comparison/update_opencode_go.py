@@ -366,6 +366,18 @@ def blended_price(
     return result
 
 
+def cost_adjusted_intelligence(
+    intelligence: Decimal, blended_price: Decimal
+) -> Decimal:
+    if not intelligence.is_finite() or intelligence < 0:
+        raise RuntimeError("OpenCode Go intelligence must be finite and non-negative")
+    if not blended_price.is_finite() or blended_price <= 0:
+        raise RuntimeError(
+            "OpenCode Go blended price must be finite and greater than zero"
+        )
+    return intelligence - Decimal(10) * blended_price.log10()
+
+
 def enrich_rows(
     rows: list[dict[str, str]], aa_rows: list[dict[str, str]]
 ) -> list[dict[str, str]]:
@@ -390,11 +402,7 @@ def enrich_rows(
         selected = select_aa_candidate(row["model"], aa_rows)
         if selected is not None:
             aa_model, intelligence = selected
-            value = intelligence / primary_blend
-            if not value.is_finite():
-                raise RuntimeError(
-                    f"OpenCode Go value score is not finite for {row['model']}"
-                )
+            value = cost_adjusted_intelligence(intelligence, primary_blend)
             row["artificial_analysis_model"] = aa_model
             row["artificial_analysis_intelligence_index"] = decimal_text(intelligence)
             row["value_score"] = decimal_text(value)

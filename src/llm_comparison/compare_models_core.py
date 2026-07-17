@@ -108,7 +108,7 @@ OPENCODE_GO_COLUMNS = [
     Column(OPENCODE_GO_BLEND, "Blended Price", True),
     Column("long_context_blended_usd_per_1m_tokens", ">256K Blended Price", True),
     Column("monthly_usage_usd", "Usage", True),
-    Column("value_score", "Intelligence per blended $/1M tokens", True),
+    Column("value_score", "Cost-adjusted intelligence", True),
 ]
 
 
@@ -426,7 +426,7 @@ def opencode_go_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
                 "OpenCode Go scraped_at must use canonical YYYY-MM-DDTHH:MM:SSZ format"
             )
 
-    graph_categories = [OPENCODE_GO_INTELLIGENCE, OPENCODE_GO_BLEND]
+    graph_categories = [OPENCODE_GO_BLEND, OPENCODE_GO_INTELLIGENCE]
     prepared: list[dict[str, Any]] = []
     ranked_positions: list[int] = []
     ranked_rows: list[dict[str, Any]] = []
@@ -461,14 +461,14 @@ def opencode_go_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
         "rows": json_ready_rows(prepared, OPENCODE_GO_COLUMNS, graph_categories, flags),
         "categories": [
             {
-                "key": OPENCODE_GO_INTELLIGENCE,
-                "label": "Artificial Analysis Intelligence Index",
-                "lowerIsBetter": False,
-            },
-            {
                 "key": OPENCODE_GO_BLEND,
                 "label": "OpenCode Go blended price ($/1M tokens)",
                 "lowerIsBetter": True,
+            },
+            {
+                "key": OPENCODE_GO_INTELLIGENCE,
+                "label": "Artificial Analysis Intelligence Index",
+                "lowerIsBetter": False,
             },
         ],
         "graphCategories": graph_categories,

@@ -637,7 +637,7 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
             "opencode_go_blended_usd_per_1m_tokens": "0.05796",
             "long_context_blended_usd_per_1m_tokens": "",
             "monthly_usage_usd": "60",
-            "value_score": "690.1311249137336093857832988",
+            "value_score": "52.36871623200863025402473033",
             "scraped_at": "2026-07-17T14:32:05Z",
         },
         {
@@ -685,14 +685,14 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
         "Blended Price",
         ">256K Blended Price",
         "Usage",
-        "Intelligence per blended $/1M tokens",
+        "Cost-adjusted intelligence",
     ]
     assert all(column["key"] != "scraped_at" for column in go["columns"])
     ranked, unranked = go["rows"]
-    assert ranked["score"] == 690.1311249137336
+    assert ranked["score"] == 52.36871623200863
     assert ranked["cells"]["value_score"] == {
-        "display": "690.13",
-        "sort": 690.1311249137336,
+        "display": "52.37",
+        "sort": 52.36871623200863,
     }
     assert (
         ranked["cells"]["opencode_go_blended_usd_per_1m_tokens"]["display"]
@@ -707,9 +707,21 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
     assert unranked["cells"]["value_score"]["display"] == "Unranked"
     assert unranked["graph"] == {}
     assert unranked["pareto"] == {"optimal": False, "suboptimal": False}
+    assert go["categories"] == [
+        {
+            "key": "opencode_go_blended_usd_per_1m_tokens",
+            "label": "OpenCode Go blended price ($/1M tokens)",
+            "lowerIsBetter": True,
+        },
+        {
+            "key": "artificial_analysis_intelligence_index",
+            "label": "Artificial Analysis Intelligence Index",
+            "lowerIsBetter": False,
+        },
+    ]
     assert go["graphCategories"] == [
-        "artificial_analysis_intelligence_index",
         "opencode_go_blended_usd_per_1m_tokens",
+        "artificial_analysis_intelligence_index",
     ]
     assert go["sourceUrl"] == "https://opencode.ai/docs/go/"
     assert go["formula"] == "(7 × cached read + 2 × input + output) ÷ 10"
@@ -763,6 +775,7 @@ def test_report_contains_semantic_navigation_and_go_bootstrap(tmp_path: Path) ->
         'fetchCsvFromPaths(["data/opencode_go.csv", "../data/opencode_go.csv"])' in html
     )
     assert "initializeGoFromCsv(parseCsv(text))" in html
+    assert 'window.location.protocol !== "file:"' in html
     assert 'id="dataFreshness">Data updated: July 17, 2026</div>' in html
     assert '`OpenCode Go pricing scraped: ${payload.scrapedAt}`' in html
     assert '[...payload.columns.map(column => column.key), "scraped_at"]' in html
@@ -771,6 +784,13 @@ def test_report_contains_semantic_navigation_and_go_bootstrap(tmp_path: Path) ->
         "Usage and cached-write prices are displayed but excluded from the score."
         in html
     )
+    assert (
+        "Cost-adjusted intelligence = Intelligence − 10 × log₁₀(blended price ÷ $1 per 1M tokens)."
+        in html
+    )
+    assert "A 10-point Intelligence gain offsets a 10× higher blended price." in html
+    assert "ranked by cost-adjusted intelligence" in html
+    assert '"Cost-adjusted intelligence" : "Final Score"' in html
     go_bootstrap = html[
         html.index(
             "if (isOpenCodeGoView) {", html.index("applyTheme(activeTheme());")

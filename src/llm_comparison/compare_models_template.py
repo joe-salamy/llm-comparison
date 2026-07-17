@@ -853,7 +853,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       document.getElementById("aboutContent").innerHTML = `
         <p>This view joins <a href="${payload.sourceUrl}" rel="noreferrer">OpenCode Go</a> token pricing and monthly Usage allowances to the <a href="https://artificialanalysis.ai/leaderboards/models" rel="noreferrer">Artificial Analysis</a> Intelligence Index.</p>
         <ul>
-          <li>Value Score is Intelligence per blended $/1M tokens.</li>
+          <li>Cost-adjusted intelligence = Intelligence − 10 × log₁₀(blended price ÷ $1 per 1M tokens).</li>
+          <li>A 10-point Intelligence gain offsets a 10× higher blended price.</li>
           <li>Blended price formula: <strong>${payload.formula}</strong>.</li>
           <li>Usage and cached-write prices are displayed but excluded from the score.</li>
           <li>Models without an Intelligence Index remain visible as Unranked.</li>
@@ -1265,7 +1266,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       if (isOpenCodeGoView) {
         const ranked = rows.filter(row => typeof row.score === "number" && Number.isFinite(row.score)).length;
         document.getElementById("summary").textContent =
-          `${rows.length} models, ${ranked} ranked by Intelligence per blended $/1M tokens`;
+          `${rows.length} models, ${ranked} ranked by cost-adjusted intelligence`;
         return;
       }
       const filterNote = excludeZeroPrice ? " (excluding free/promo models)" : "";
@@ -2793,7 +2794,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       for (const category of categories) {
         lines.push(`${escapeHtml(category.label)}: ${row.graph[category.key]}`);
       }
-      lines.push(`${isOpenCodeGoView ? "Value Score" : "Final Score"}: ${row.score.toFixed(2)}`);
+      lines.push(`${isOpenCodeGoView ? "Cost-adjusted intelligence" : "Final Score"}: ${row.score.toFixed(2)}`);
       if (row.pareto.optimal) lines.push("Pareto optimal");
       if (row.pareto.suboptimal) lines.push("Pareto suboptimal");
       return lines.join("<br>");
@@ -2851,9 +2852,11 @@ HTML_TEMPLATE = r"""<!doctype html>
     applyTheme(activeTheme());
     if (isOpenCodeGoView) {
       initializeEmbeddedGo();
-      fetchCsvFromPaths(["data/opencode_go.csv", "../data/opencode_go.csv"])
-        .then(text => initializeGoFromCsv(parseCsv(text)))
-        .catch(() => {});
+      if (window.location.protocol !== "file:") {
+        fetchCsvFromPaths(["data/opencode_go.csv", "../data/opencode_go.csv"])
+          .then(text => initializeGoFromCsv(parseCsv(text)))
+          .catch(() => {});
+      }
     } else {
       applyUrlOptions();
       applySelection();
