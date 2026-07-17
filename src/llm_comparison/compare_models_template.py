@@ -789,8 +789,8 @@ HTML_TEMPLATE = r"""<!doctype html>
         <ul>
           <li>Higher is better for quality, benchmark, context, and speed metrics.</li>
           <li>Lower is better for price, latency, and time metrics.</li>
-          <li>The final score is the average of direction-adjusted percentile ranks across the selected metrics.</li>
-          <li>Models missing any selected numeric metric are excluded from that run.</li>
+          <li>The final score is the relative geometric mean of actual metric ratios. A score of 100 matches fixed reference values; higher is better.</li>
+          <li>Models missing any selected numeric metric, or containing a nonpositive selected value, are excluded from that run.</li>
         </ul>
         <p>Credit: model benchmark, pricing, and performance data is from <a href="https://artificialanalysis.ai/leaderboards/models" rel="noreferrer">Artificial Analysis</a>. This project is an independent analysis and is not affiliated with Artificial Analysis.</p>
       </div>
@@ -1102,22 +1102,21 @@ HTML_TEMPLATE = r"""<!doctype html>
       );
     }
 
-    function percentileScores(values, lowerIsBetter) {
-      if (values.length === 1) return [100];
-      const sorted = values.map((value, index) => ({ value, index })).sort((a, b) => a.value - b.value);
-      const scores = Array(values.length).fill(0);
-      let index = 0;
-      while (index < sorted.length) {
-        let end = index + 1;
-        while (end < sorted.length && sorted[end].value === sorted[index].value) end += 1;
-        const averageRank = (index + end - 1) / 2;
-        const percentile = 100 * averageRank / (values.length - 1);
-        for (let itemIndex = index; itemIndex < end; itemIndex += 1) {
-          scores[sorted[itemIndex].index] = lowerIsBetter ? 100 - percentile : percentile;
-        }
-        index = end;
-      }
-      return scores;
+    function metricReferenceValue(category) {
+      if (category === "context_window_tokens") return 100000;
+      if (category.endsWith("_pct") || category.endsWith("_index")) return 50;
+      if (category.includes("tokens_per_second")) return 100;
+      return 1;
+    }
+
+    function relativeGeometricScore(graph, categories) {
+      const meanLogRatio = categories.reduce((sum, category) => {
+        const value = graph[category];
+        const reference = metricReferenceValue(category);
+        const ratio = isLowerBetter(category) ? reference / value : value / reference;
+        return sum + Math.log(ratio);
+      }, 0) / categories.length;
+      return 100 * Math.exp(meanLogRatio);
     }
 
     function dominates(challenger, target, categories, better) {
@@ -1162,14 +1161,13 @@ HTML_TEMPLATE = r"""<!doctype html>
 
     function scoreSourceRows(categories) {
       const completeRows = [];
-      const valuesByCategory = Object.fromEntries(categories.map(category => [category, []]));
       for (const raw of sourceRows) {
         if (excludeZeroPrice && parseNumber(raw.blended_usd_per_1m_tokens) === 0) continue;
         const graph = {};
         let complete = true;
         for (const category of categories) {
           const parsed = parseNumber(raw[category]);
-          if (parsed === null) {
+          if (parsed === null || parsed <= 0) {
             complete = false;
             break;
           }
@@ -1178,14 +1176,10 @@ HTML_TEMPLATE = r"""<!doctype html>
         if (!complete) continue;
         const row = { raw, graph, score: 0, cells: {}, model: raw.model || "" };
         completeRows.push(row);
-        for (const category of categories) valuesByCategory[category].push(graph[category]);
       }
 
-      const scoresByCategory = Object.fromEntries(
-        categories.map(category => [category, percentileScores(valuesByCategory[category], isLowerBetter(category))]),
-      );
-      for (const [rowIndex, row] of completeRows.entries()) {
-        const score = categories.reduce((sum, category) => sum + scoresByCategory[category][rowIndex], 0) / categories.length;
+      for (const row of completeRows) {
+        const score = relativeGeometricScore(row.graph, categories);
         row.score = Math.round(score * 10000) / 10000;
         row.graph.final_score = row.score;
       }
@@ -1207,7 +1201,6 @@ HTML_TEMPLATE = r"""<!doctype html>
 
     function scoreEmbeddedRows(categories) {
       const completeRows = [];
-      const valuesByCategory = Object.fromEntries(categories.map(category => [category, []]));
       for (const original of embeddedRows) {
         const priceCell = original.cells.blended_usd_per_1m_tokens;
         const priceValue = priceCell?.sort ?? original.graph.blended_usd_per_1m_tokens;
@@ -1216,7 +1209,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         let complete = true;
         for (const category of categories) {
           const parsed = parseNumber(original.graph[category]);
-          if (parsed === null) {
+          if (parsed === null || parsed <= 0) {
             complete = false;
             break;
           }
@@ -1230,14 +1223,10 @@ HTML_TEMPLATE = r"""<!doctype html>
           score: 0,
         };
         completeRows.push(row);
-        for (const category of categories) valuesByCategory[category].push(graph[category]);
       }
 
-      const scoresByCategory = Object.fromEntries(
-        categories.map(category => [category, percentileScores(valuesByCategory[category], isLowerBetter(category))]),
-      );
-      for (const [rowIndex, row] of completeRows.entries()) {
-        const score = categories.reduce((sum, category) => sum + scoresByCategory[category][rowIndex], 0) / categories.length;
+      for (const row of completeRows) {
+        const score = relativeGeometricScore(row.graph, categories);
         row.score = Math.round(score * 10000) / 10000;
         row.cells.final_score = {
           display: formatValue("final_score", row.score),

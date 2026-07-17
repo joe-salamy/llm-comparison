@@ -177,42 +177,34 @@ def is_lower_better(column: str) -> bool:
     return any(marker in column for marker in LOWER_IS_BETTER_MARKERS)
 
 
-def percentile_scores(values: list[float], lower_is_better: bool) -> list[float]:
-    if len(values) == 1:
-        return [100.0]
+def metric_reference_value(column: str) -> float:
+    if column == "context_window_tokens":
+        return 100_000.0
+    if column.endswith("_pct") or column.endswith("_index"):
+        return 50.0
+    if "tokens_per_second" in column:
+        return 100.0
+    return 1.0
 
-    sorted_pairs = sorted(enumerate(values), key=lambda item: item[1])
-    raw_scores = [0.0] * len(values)
-    index = 0
-    while index < len(sorted_pairs):
-        end = index + 1
-        while (
-            end < len(sorted_pairs) and sorted_pairs[end][1] == sorted_pairs[index][1]
-        ):
-            end += 1
 
-        average_rank = (index + end - 1) / 2
-        percentile = 100 * average_rank / (len(values) - 1)
-        for original_index, _value in sorted_pairs[index:end]:
-            raw_scores[original_index] = percentile
-        index = end
-
-    if lower_is_better:
-        return [100 - score for score in raw_scores]
-    return raw_scores
+def relative_geometric_score(values: dict[str, float]) -> float:
+    log_ratios = []
+    for category, value in values.items():
+        reference = metric_reference_value(category)
+        ratio = reference / value if is_lower_better(category) else value / reference
+        log_ratios.append(math.log(ratio))
+    return 100 * math.exp(statistics.fmean(log_ratios))
 
 
 def score_rows(
     rows: list[dict[str, str]], categories: list[str]
 ) -> list[dict[str, Any]]:
     complete_rows: list[dict[str, Any]] = []
-    parsed_values: dict[str, list[float]] = {category: [] for category in categories}
-
     for row in rows:
         parsed_row: dict[str, float] = {}
         for category in categories:
             value = parse_float(row.get(category))
-            if value is None:
+            if value is None or value <= 0:
                 break
             parsed_row[category] = value
         else:
@@ -220,26 +212,13 @@ def score_rows(
             output_row["_raw_values"] = parsed_row
             complete_rows.append(output_row)
 
-            for category, value in parsed_row.items():
-                parsed_values[category].append(value)
-
     if not complete_rows:
         category_list = ", ".join(categories)
         raise ValueError(f"No rows have complete numeric data for: {category_list}")
 
-    per_category_scores: dict[str, list[float]] = {}
-    for category, values in parsed_values.items():
-        per_category_scores[category] = percentile_scores(
-            values, is_lower_better(category)
-        )
-
-    for row_index, row in enumerate(complete_rows):
-        category_scores = {
-            category: per_category_scores[category][row_index]
-            for category in categories
-        }
-        scored_row = cast(dict[str, Any], row)
-        scored_row[FINAL_SCORE] = round(statistics.fmean(category_scores.values()), 4)
+    for scored_row in complete_rows:
+        raw_values = cast(dict[str, float], scored_row["_raw_values"])
+        scored_row[FINAL_SCORE] = round(relative_geometric_score(raw_values), 4)
 
     complete_rows.sort(key=lambda row: row[FINAL_SCORE], reverse=True)
     return complete_rows
@@ -418,9 +397,7 @@ def opencode_go_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
                 "OpenCode Go rows must contain one identical non-empty scraped_at value"
             )
         scraped_at = scraped_values.pop()
-        parsed_scraped_at = datetime.strptime(
-            scraped_at, "%Y-%m-%dT%H:%M:%SZ"
-        )
+        parsed_scraped_at = datetime.strptime(scraped_at, "%Y-%m-%dT%H:%M:%SZ")
         if parsed_scraped_at.strftime("%Y-%m-%dT%H:%M:%SZ") != scraped_at:
             raise ValueError(
                 "OpenCode Go scraped_at must use canonical YYYY-MM-DDTHH:MM:SSZ format"

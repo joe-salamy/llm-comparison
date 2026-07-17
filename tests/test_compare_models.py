@@ -591,23 +591,68 @@ def test_exclude_zero_price_rows_removes_zero_price_models() -> None:
     assert [row["model"] for row in filtered] == ["paid", "empty"]
 
 
-def test_exclude_zero_price_changes_percentile_scores(tmp_path: Path) -> None:
+def test_low_quality_model_does_not_change_existing_scores() -> None:
     rows = [
-        {"model": "free", "quality": "50", "blended_usd_per_1m_tokens": "0.00"},
-        {"model": "mid", "quality": "60", "blended_usd_per_1m_tokens": "1.00"},
-        {"model": "top", "quality": "100", "blended_usd_per_1m_tokens": "2.00"},
+        {"model": "mid", "quality": "60"},
+        {"model": "top", "quality": "100"},
+    ]
+    rows_with_trash = [{"model": "trash", "quality": "1"}, *rows]
+
+    base_scores = {
+        row["model"]: row[FINAL_SCORE] for row in score_rows(rows, ["quality"])
+    }
+    expanded_scores = {
+        row["model"]: row[FINAL_SCORE]
+        for row in score_rows(rows_with_trash, ["quality"])
+    }
+
+    assert expanded_scores["mid"] == base_scores["mid"]
+    assert expanded_scores["top"] == base_scores["top"]
+
+
+def test_relative_geometric_score_uses_actual_metric_ratios() -> None:
+    rows = [
+        {
+            "model": "balanced",
+            "artificial_analysis_intelligence_index": "50",
+            "blended_usd_per_1m_tokens": "1",
+        },
+        {
+            "model": "expensive",
+            "artificial_analysis_intelligence_index": "100",
+            "blended_usd_per_1m_tokens": "4",
+        },
+        {
+            "model": "efficient",
+            "artificial_analysis_intelligence_index": "25",
+            "blended_usd_per_1m_tokens": "0.25",
+        },
     ]
 
-    scored_with_free = score_rows(rows, ["quality"])
-    scored_without_free = score_rows(exclude_zero_price_rows(rows), ["quality"])
+    scored = score_rows(
+        rows,
+        [
+            "artificial_analysis_intelligence_index",
+            "blended_usd_per_1m_tokens",
+        ],
+    )
 
-    with_free_scores = {row["model"]: row[FINAL_SCORE] for row in scored_with_free}
-    without_free_scores = {
-        row["model"]: row[FINAL_SCORE] for row in scored_without_free
-    }
-    assert "free" not in without_free_scores
-    assert with_free_scores["mid"] != without_free_scores["mid"]
-    assert without_free_scores["top"] == 100.0
+    assert [row["model"] for row in scored] == ["efficient", "balanced", "expensive"]
+    assert scored[0][FINAL_SCORE] == pytest.approx(141.4214)
+    assert scored[1][FINAL_SCORE] == 100.0
+    assert scored[2][FINAL_SCORE] == pytest.approx(70.7107)
+
+
+def test_nonpositive_selected_metric_is_excluded() -> None:
+    rows = [
+        {"model": "free", "blended_usd_per_1m_tokens": "0"},
+        {"model": "paid", "blended_usd_per_1m_tokens": "1"},
+    ]
+
+    scored = score_rows(rows, ["blended_usd_per_1m_tokens"])
+
+    assert [row["model"] for row in scored] == ["paid"]
+    assert scored[0][FINAL_SCORE] == 100.0
 
 
 def embedded_payload(html: str) -> dict[str, object]:
@@ -777,7 +822,7 @@ def test_report_contains_semantic_navigation_and_go_bootstrap(tmp_path: Path) ->
     assert "initializeGoFromCsv(parseCsv(text))" in html
     assert 'window.location.protocol !== "file:"' in html
     assert 'id="dataFreshness">Data updated: July 17, 2026</div>' in html
-    assert '`OpenCode Go pricing scraped: ${payload.scrapedAt}`' in html
+    assert "`OpenCode Go pricing scraped: ${payload.scrapedAt}`" in html
     assert '[...payload.columns.map(column => column.key), "scraped_at"]' in html
     assert "payload.scrapedAt = scrapedAt;" in html
     assert (
@@ -785,8 +830,8 @@ def test_report_contains_semantic_navigation_and_go_bootstrap(tmp_path: Path) ->
         in html
     )
     assert (
-        "Cost-adjusted intelligence = Intelligence − 10 × log₁₀(blended price ÷ $1 per 1M tokens)."
-        in html
+        "Cost-adjusted intelligence = Intelligence − 10 × log₁₀"
+        "(blended price ÷ $1 per 1M tokens)." in html
     )
     assert "A 10-point Intelligence gain offsets a 10× higher blended price." in html
     assert "ranked by cost-adjusted intelligence" in html

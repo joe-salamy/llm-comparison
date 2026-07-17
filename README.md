@@ -72,12 +72,13 @@ The report includes a sortable HTML table with the original selected columns plu
 
 ## Scoring
 
-Models are scored with direction-adjusted percentile ranks:
+Models are scored from their actual metric values using a relative geometric mean:
 
-- Higher is better for quality, benchmark, context, and speed metrics.
-- Lower is better for price, latency, and time metrics.
-- `Final Score` is the average percentile score across the requested categories.
-- Models missing any requested scoring category are excluded from that run.
+- Each higher-is-better metric contributes `value / reference`; price, latency, and time metrics contribute `reference / value`.
+- Fixed references are 50 for percentage/index metrics, 100,000 for context windows, 100 for token-speed metrics, and 1 otherwise.
+- `Final Score` is 100 times the geometric mean of those ratios. A score of 100 matches the fixed references for the selected metrics.
+- Adding or removing other models does not change an existing model's score or rank.
+- Models missing a requested scoring category, or containing a nonpositive selected value, are excluded from that run.
 
 List available categories and aliases:
 
