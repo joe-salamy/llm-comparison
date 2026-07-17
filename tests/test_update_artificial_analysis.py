@@ -239,7 +239,20 @@ def test_async_main_defaults_missing_uploaded_date_to_today(
     ]
 
 
-def test_run_publish_script_resolves_relative_path_from_git_root(
+def test_default_paths_resolve_from_project_root() -> None:
+    args = updater.parse_args([])
+
+    assert args.csv == updater.PROJECT_ROOT / "data/results.csv"
+    assert args.html == updater.PROJECT_ROOT / "public/index.html"
+    assert args.template == (
+        updater.PROJECT_ROOT / "src/llm_comparison/compare_models_template.py"
+    )
+    assert args.publish_script == (
+        updater.PROJECT_ROOT / "scripts/update-gh-pages.py"
+    )
+
+
+def test_run_publish_script_resolves_relative_path_from_project_root(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     repo_root = tmp_path / "repo"
@@ -254,23 +267,19 @@ def test_run_publish_script_resolves_relative_path_from_git_root(
         stderr: int | None = None,
         cwd: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
-        assert check is (command == ["git", "rev-parse", "--show-toplevel"])
-        calls.append((command, cwd))
-        if command == ["git", "rev-parse", "--show-toplevel"]:
-            assert encoding == "utf-8"
-            assert stdout == subprocess.PIPE
-            return subprocess.CompletedProcess(command, 0, stdout=f"{repo_root}\n")
+        assert check is False
         assert encoding == "utf-8"
         assert stdout == subprocess.PIPE
         assert stderr == subprocess.PIPE
+        calls.append((command, cwd))
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
+    monkeypatch.setattr(updater, "PROJECT_ROOT", repo_root)
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     updater.run_publish_script(Path("scripts/update-gh-pages.py"))
 
     assert calls == [
-        (["git", "rev-parse", "--show-toplevel"], None),
         ([sys.executable, str(repo_root / "scripts/update-gh-pages.py")], repo_root),
     ]
 

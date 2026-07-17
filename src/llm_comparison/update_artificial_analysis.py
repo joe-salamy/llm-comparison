@@ -25,11 +25,12 @@ else:
         write_table_csv,
     )
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_URL = "https://artificialanalysis.ai/leaderboards/models"
-DEFAULT_CSV = Path("data/results.csv")
-DEFAULT_HTML = Path("public/index.html")
-DEFAULT_TEMPLATE = Path("src/llm_comparison/compare_models_template.py")
-DEFAULT_PUBLISH_SCRIPT = Path("scripts/update-gh-pages.py")
+DEFAULT_CSV = PROJECT_ROOT / "data/results.csv"
+DEFAULT_HTML = PROJECT_ROOT / "public/index.html"
+DEFAULT_TEMPLATE = PROJECT_ROOT / "src/llm_comparison/compare_models_template.py"
+DEFAULT_PUBLISH_SCRIPT = PROJECT_ROOT / "scripts/update-gh-pages.py"
 
 
 class HeaderSnapshot(TypedDict):
@@ -224,19 +225,12 @@ async def scrape_table(
 
 
 def run_publish_script(script_path: Path) -> None:
-    root_result = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        check=True,
-        encoding="utf-8",
-        stdout=subprocess.PIPE,
-    )
-    repo_root = Path(root_result.stdout.strip())
     resolved_script = (
-        script_path if script_path.is_absolute() else repo_root / script_path
+        script_path if script_path.is_absolute() else PROJECT_ROOT / script_path
     )
     publish_result = subprocess.run(
         [sys.executable, str(resolved_script)],
-        cwd=repo_root,
+        cwd=PROJECT_ROOT,
         check=False,
         encoding="utf-8",
         stdout=subprocess.PIPE,
