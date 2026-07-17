@@ -1,0 +1,14 @@
+{
+  "audit_head_before": "3e1c596f2a781605f4428b2e834c53b52b2970c0",
+  "base": "master",
+  "completed_stage": "cleanup_complete",
+  "feature_branch": "feature/opencode-go-value-comparison",
+  "feature_worktree": "/mnt/c/Users/joesa/code/llm-comparison-opencode-go-value-comparison",
+  "integration_branch": "integration/opencode-go-value-comparison-20260717-121456",
+  "integration_worktree": "/mnt/c/Users/joesa/code/llm-comparison-integrate-opencode-go-value-comparison-20260717-121456",
+  "merge_mode": "squash",
+  "plan_path": "/mnt/c/Users/joesa/code/llm-comparison-opencode-go-value-comparison/.omp/worktree-flow/20260717-113552-opencode-go-value-comparison/plan.md",
+  "plan_title": "OpenCode Go Value Comparison",
+  "run_id": "20260717-113552-opencode-go-value-comparison",
+  "slug": "opencode-go-value-comparison"
+}
