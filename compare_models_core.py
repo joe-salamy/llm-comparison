@@ -5,6 +5,7 @@ import json
 import math
 import statistics
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -95,6 +96,22 @@ class Column:
     numeric: bool
 
 
+OPENCODE_GO_INTELLIGENCE = "artificial_analysis_intelligence_index"
+OPENCODE_GO_BLEND = "opencode_go_blended_usd_per_1m_tokens"
+OPENCODE_GO_COLUMNS = [
+    Column("model", "Model", False),
+    Column(OPENCODE_GO_INTELLIGENCE, "Artificial Analysis Intelligence Index", True),
+    Column("input_price_usd_per_1m_tokens", "Input", True),
+    Column("output_price_usd_per_1m_tokens", "Output", True),
+    Column("cache_read_usd_per_1m_tokens", "Cached Read", True),
+    Column("cache_write_usd_per_1m_tokens", "Cached Write", True),
+    Column(OPENCODE_GO_BLEND, "Blended Price", True),
+    Column("long_context_blended_usd_per_1m_tokens", ">256K Blended Price", True),
+    Column("monthly_usage_usd", "Usage", True),
+    Column("value_score", "Intelligence per blended $/1M tokens", True),
+]
+
+
 def read_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
     with path.open(newline="", encoding="utf-8") as input_file:
         reader = csv.DictReader(input_file)
@@ -124,6 +141,7 @@ def numeric_columns(headers: list[str], rows: list[dict[str, str]]) -> set[str]:
             numeric.add(header)
     return numeric
 
+
 def exclude_zero_price_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     price_key = "blended_usd_per_1m_tokens"
     kept: list[dict[str, str]] = []
@@ -133,6 +151,7 @@ def exclude_zero_price_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
             continue
         kept.append(row)
     return kept
+
 
 def normalize_name(name: str) -> str:
     return name.strip().lower().replace("_", "-").replace(" ", "-")
@@ -168,8 +187,7 @@ def percentile_scores(values: list[float], lower_is_better: bool) -> list[float]
     while index < len(sorted_pairs):
         end = index + 1
         while (
-            end < len(sorted_pairs)
-            and sorted_pairs[end][1] == sorted_pairs[index][1]
+            end < len(sorted_pairs) and sorted_pairs[end][1] == sorted_pairs[index][1]
         ):
             end += 1
 
@@ -309,7 +327,28 @@ def format_value(key: str, value: Any) -> str:
 
     parsed = parse_float(str(value)) if value is not None else None
     if parsed is None:
+        if key in {OPENCODE_GO_INTELLIGENCE, "value_score"}:
+            return "Unranked"
         return "" if value is None else str(value)
+    if key == "value_score":
+        return f"{parsed:.2f}"
+    if key == OPENCODE_GO_INTELLIGENCE:
+        return f"{parsed:g}"
+    if key == "monthly_usage_usd":
+        return f"${parsed:g}"
+    if key in {
+        "input_price_usd_per_1m_tokens",
+        "output_price_usd_per_1m_tokens",
+        "cache_read_usd_per_1m_tokens",
+        "cache_write_usd_per_1m_tokens",
+        "long_context_input_price_usd_per_1m_tokens",
+        "long_context_output_price_usd_per_1m_tokens",
+        "long_context_cache_read_usd_per_1m_tokens",
+        "long_context_cache_write_usd_per_1m_tokens",
+        OPENCODE_GO_BLEND,
+        "long_context_blended_usd_per_1m_tokens",
+    }:
+        return f"${parsed:.6f}".rstrip("0").rstrip(".")
 
     if key == "context_window_tokens":
         return f"{int(parsed):,}"
@@ -344,9 +383,7 @@ def json_ready_rows(
             cells[column.key] = {
                 "display": format_value(column.key, raw_value),
                 "sort": (
-                    numeric_value
-                    if numeric_value is not None
-                    else str(raw_value or "")
+                    numeric_value if numeric_value is not None else str(raw_value or "")
                 ),
             }
 
@@ -354,7 +391,7 @@ def json_ready_rows(
         graph = {}
         for category in graph_categories:
             value = raw_values.get(category)
-            if value is None:
+            if value is None and "_raw_values" not in row:
                 value = parse_float(str(row.get(category, "")))
             if value is not None:
                 graph[category] = value
@@ -372,6 +409,75 @@ def json_ready_rows(
     return output
 
 
+def opencode_go_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
+    scraped_at = ""
+    if rows:
+        scraped_values = {row.get("scraped_at", "").strip() for row in rows}
+        if "" in scraped_values or len(scraped_values) != 1:
+            raise ValueError(
+                "OpenCode Go rows must contain one identical non-empty scraped_at value"
+            )
+        scraped_at = scraped_values.pop()
+        parsed_scraped_at = datetime.strptime(
+            scraped_at, "%Y-%m-%dT%H:%M:%SZ"
+        )
+        if parsed_scraped_at.strftime("%Y-%m-%dT%H:%M:%SZ") != scraped_at:
+            raise ValueError(
+                "OpenCode Go scraped_at must use canonical YYYY-MM-DDTHH:MM:SSZ format"
+            )
+
+    graph_categories = [OPENCODE_GO_INTELLIGENCE, OPENCODE_GO_BLEND]
+    prepared: list[dict[str, Any]] = []
+    ranked_positions: list[int] = []
+    ranked_rows: list[dict[str, Any]] = []
+    for position, source in enumerate(rows):
+        intelligence = parse_float(source.get(OPENCODE_GO_INTELLIGENCE))
+        blend = parse_float(source.get(OPENCODE_GO_BLEND))
+        score = parse_float(source.get("value_score"))
+        row: dict[str, Any] = {
+            **source,
+            FINAL_SCORE: score,
+            "_raw_values": {},
+        }
+        if intelligence is not None and blend is not None:
+            row["_raw_values"] = {
+                OPENCODE_GO_INTELLIGENCE: intelligence,
+                OPENCODE_GO_BLEND: blend,
+            }
+            ranked_positions.append(position)
+            ranked_rows.append(row)
+        prepared.append(row)
+
+    ranked_flags = pareto_flags(ranked_rows, graph_categories)
+    flags = [{"optimal": False, "suboptimal": False} for _ in prepared]
+    for position, flag in zip(ranked_positions, ranked_flags, strict=True):
+        flags[position] = flag
+
+    return {
+        "columns": [
+            {"key": column.key, "label": column.label, "numeric": column.numeric}
+            for column in OPENCODE_GO_COLUMNS
+        ],
+        "rows": json_ready_rows(prepared, OPENCODE_GO_COLUMNS, graph_categories, flags),
+        "categories": [
+            {
+                "key": OPENCODE_GO_INTELLIGENCE,
+                "label": "Artificial Analysis Intelligence Index",
+                "lowerIsBetter": False,
+            },
+            {
+                "key": OPENCODE_GO_BLEND,
+                "label": "OpenCode Go blended price ($/1M tokens)",
+                "lowerIsBetter": True,
+            },
+        ],
+        "graphCategories": graph_categories,
+        "scrapedAt": scraped_at,
+        "sourceUrl": "https://opencode.ai/docs/go/",
+        "formula": "(7 × cached read + 2 × input + output) ÷ 10",
+    }
+
+
 def write_html(
     output_path: Path,
     rows: list[dict[str, Any]],
@@ -379,6 +485,7 @@ def write_html(
     categories: list[str],
     pareto: list[ParetoFlag],
     available_categories: list[str] | None = None,
+    opencode_go_rows: list[dict[str, str]] | None = None,
 ) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -408,6 +515,7 @@ def write_html(
             for category in available_categories
         ],
         "graphCategories": graph_categories,
+        "openCodeGo": opencode_go_payload(opencode_go_rows or []),
     }
 
     payload_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")

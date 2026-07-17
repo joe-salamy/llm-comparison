@@ -32,15 +32,22 @@ in `data/results.csv`.
 
 ## Update and Publish
 
-Fetch the latest Artificial Analysis table, update `data/results.csv`, refresh
-the generated report date with today's date, commit generated outputs, and
-publish GitHub Pages:
+Run the installed unified updater, or its module equivalent:
 
 ```powershell
-update-artificial-analysis
+update-all-data
+python -m llm_comparison.update_all_data
 ```
 
-Use `--skip-publish` when you only want to refresh local data files.
+This is the complete refresh workflow. It scrapes and writes Artificial Analysis
+data and updates the report-wide display date first, then scrapes OpenCode Go
+live pricing and joins it to the newly written Artificial Analysis CSV. Finally,
+it invokes the GitHub Pages publisher once. The publisher creates one combined
+source-data commit containing both generated datasets and report artifacts, plus
+the required separate deployment commit on `gh-pages`.
+
+Use `update-all-data --skip-publish` to refresh both datasets locally without
+committing or publishing.
 
 ## Compare Models
 
@@ -82,25 +89,33 @@ Common aliases include `intelligence`, `price`, `speed`, `latency`, and `respons
 
 ## Convert Raw Results
 
-Use the installed `update-artificial-analysis` command, or run
-`python -m llm_comparison.update_artificial_analysis`, to refresh Artificial
-Analysis data without manual clipboard selection. The upload date defaults to
-today:
+The source-specific commands are local-only diagnostic tools:
 
 ```powershell
 update-artificial-analysis
+python -m llm_comparison.update_artificial_analysis
+update-opencode-go
+python -m llm_comparison.update_opencode_go
 ```
 
-The updater opens the Artificial Analysis leaderboard, expands columns, reads
-the table DOM, writes `data/results.csv`, updates the displayed data date in
-`src/llm_comparison/compare_models_template.py` and `public/index.html` when
-those files are present, then runs `scripts/update-gh-pages.py` to commit the
-generated outputs and republish the GitHub Pages branch. Pass `--skip-publish`
-to only refresh the local data files.
+`update-artificial-analysis` scrapes the Artificial Analysis leaderboard, writes
+`data/results.csv`, and updates the report-wide human-readable display date in
+`src/llm_comparison/compare_models_template.py` and `public/index.html`.
+`update-opencode-go` scrapes live OpenCode Go pricing and joins it to the current
+`data/results.csv`. These commands never commit or publish, and neither alone is
+the complete refresh workflow.
 
-If the automated updater is unavailable, use the installed `convert-results`
-command, or run `python -m llm_comparison.convert_results`, as a manual fallback
-for copied Artificial Analysis source text:
+The final `data/opencode_go.csv` column, `scraped_at`, records the OpenCode Go
+pricing scrape completion time. One value is repeated on every row in UTC RFC
+3339 whole-second form (`YYYY-MM-DDTHH:MM:SSZ`). The exact same value appears in
+the report metadata at `?view=opencode-go`; select the **OpenCode Go value**
+navigation item or open `https://<site>/index.html?view=opencode-go` directly.
+The default Comparison view continues to show the separate report-wide
+Artificial Analysis display date.
+
+If the automated Artificial Analysis updater is unavailable, use the installed
+`convert-results` command, or run `python -m llm_comparison.convert_results`, as
+a manual fallback for copied Artificial Analysis source text:
 
 1. Go to https://artificialanalysis.ai/leaderboards/models
 2. Expand all columns
@@ -108,7 +123,7 @@ for copied Artificial Analysis source text:
 4. Paste into `data/input.txt`
 5. Run `convert-results`
 
-By default, both converters write `data/results.csv`.
+The manual converter writes `data/results.csv`.
 
 ## Development
 

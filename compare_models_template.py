@@ -142,6 +142,22 @@ HTML_TEMPLATE = r"""<!doctype html>
       gap: 18px;
       margin-bottom: 16px;
     }
+    .view-nav {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .view-nav a {
+      padding: 8px 0;
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .view-nav a[aria-current="page"] {
+      color: var(--heading);
+      border-bottom: 2px solid var(--blue);
+      font-weight: 700;
+    }
     h1 {
       margin: 0 0 4px;
       font-size: 24px;
@@ -688,11 +704,15 @@ HTML_TEMPLATE = r"""<!doctype html>
 </head>
 <body>
   <main>
+    <nav class="view-nav" aria-label="Report views">
+      <a id="comparisonViewLink" href="./index.html">Comparison</a>
+      <a id="openCodeGoViewLink" href="?view=opencode-go">OpenCode Go value</a>
+    </nav>
     <header>
       <div>
-        <h1>LLM Comparison</h1>
+        <h1 id="pageTitle">LLM Comparison</h1>
         <div class="meta-stack">
-          <div class="meta">Data updated: July 17, 2026</div>
+          <div class="meta" id="dataFreshness">Data updated: July 17, 2026</div>
           <div class="meta" id="summary"></div>
         </div>
       </div>
@@ -764,7 +784,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     </div>
     <section class="info-wrap" aria-labelledby="aboutTitle">
       <h2 class="info-title" id="aboutTitle">About this comparison</h2>
-      <div class="info-grid">
+      <div class="info-grid" id="aboutContent">
         <p>This static report ranks LLMs from the included <code>data/results.csv</code> data file. The source data was copied from Artificial Analysis, converted locally, and published here so viewers can change comparisons without collecting the data themselves.</p>
         <ul>
           <li>Higher is better for quality, benchmark, context, and speed metrics.</li>
@@ -817,6 +837,31 @@ HTML_TEMPLATE = r"""<!doctype html>
       total_response_time_seconds: "Total Response Time (s)",
       reasoning_time_seconds: "Reasoning Time (s)",
     };
+    const isOpenCodeGoView =
+      new URLSearchParams(window.location.search).get("view") === "opencode-go";
+    if (isOpenCodeGoView) {
+      Object.assign(payload, payload.openCodeGo);
+      document.getElementById("dataFreshness").textContent =
+        `OpenCode Go pricing scraped: ${payload.scrapedAt}`;
+    }
+    document.getElementById(isOpenCodeGoView ? "openCodeGoViewLink" : "comparisonViewLink")
+      .setAttribute("aria-current", "page");
+    if (isOpenCodeGoView) {
+      document.querySelector(".controls-wrap").hidden = true;
+      document.getElementById("pageTitle").textContent = "OpenCode Go value";
+      document.getElementById("aboutTitle").textContent = "About OpenCode Go value";
+      document.getElementById("aboutContent").innerHTML = `
+        <p>This view joins <a href="${payload.sourceUrl}" rel="noreferrer">OpenCode Go</a> token pricing and monthly Usage allowances to the <a href="https://artificialanalysis.ai/leaderboards/models" rel="noreferrer">Artificial Analysis</a> Intelligence Index.</p>
+        <ul>
+          <li>Value Score is Intelligence per blended $/1M tokens.</li>
+          <li>Blended price formula: <strong>${payload.formula}</strong>.</li>
+          <li>Usage and cached-write prices are displayed but excluded from the score.</li>
+          <li>Models without an Intelligence Index remain visible as Unranked.</li>
+        </ul>`;
+    }
+    const goValueKey = "value_score";
+    const goIntelligenceKey = "artificial_analysis_intelligence_index";
+    const goBlendKey = "opencode_go_blended_usd_per_1m_tokens";
     const embeddedRows = payload.rows.slice();
     let sourceRows = [];
     let availableCategories = (payload.availableCategories || payload.categories).slice();
@@ -843,7 +888,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       "first_chunk_latency_seconds",
       "total_response_time_seconds",
     ];
-    let sortState = { key: "final_score", direction: "desc" };
+    let sortState = { key: isOpenCodeGoView ? goValueKey : "final_score", direction: "desc" };
     let minScore = 0;
     let maxScore = 100;
     let medianScore = 50;
@@ -978,8 +1023,27 @@ HTML_TEMPLATE = r"""<!doctype html>
     function formatValue(key, value) {
       if (key === "final_score") return Number(value).toFixed(2);
       const parsed = parseNumber(value);
-      if (parsed === null) return value ?? "";
-      const general = () => Number.isInteger(parsed) ? String(parsed) : String(parsed);
+      if (parsed === null) {
+        return [goIntelligenceKey, goValueKey].includes(key) ? "Unranked" : (value ?? "");
+      }
+      const general = () => String(parsed);
+      if (key === goValueKey) return parsed.toFixed(2);
+      if (key === goIntelligenceKey) return general();
+      if (key === "monthly_usage_usd") return `$${general()}`;
+      if ([
+        "input_price_usd_per_1m_tokens",
+        "output_price_usd_per_1m_tokens",
+        "cache_read_usd_per_1m_tokens",
+        "cache_write_usd_per_1m_tokens",
+        "long_context_input_price_usd_per_1m_tokens",
+        "long_context_output_price_usd_per_1m_tokens",
+        "long_context_cache_read_usd_per_1m_tokens",
+        "long_context_cache_write_usd_per_1m_tokens",
+        goBlendKey,
+        "long_context_blended_usd_per_1m_tokens",
+      ].includes(key)) {
+        return `$${parsed.toFixed(6).replace(/\.?0+$/, "")}`;
+      }
       if (key === "context_window_tokens") return Math.round(parsed).toLocaleString();
       if (key.endsWith("_pct") || key.endsWith("_index")) return general();
       if (key.includes("usd") || key.includes("seconds")) return parsed.toFixed(2);
@@ -1186,7 +1250,10 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
 
     function updateScoreScale() {
-      const scoreValues = rows.map(row => row.score).sort((a, b) => a - b);
+      const scoreValues = rows
+        .map(row => row.score)
+        .filter(score => typeof score === "number" && Number.isFinite(score))
+        .sort((a, b) => a - b);
       minScore = scoreValues[0] ?? 0;
       maxScore = scoreValues[scoreValues.length - 1] ?? 100;
       medianScore = scoreValues.length
@@ -1195,6 +1262,12 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
 
     function updateSummary() {
+      if (isOpenCodeGoView) {
+        const ranked = rows.filter(row => typeof row.score === "number" && Number.isFinite(row.score)).length;
+        document.getElementById("summary").textContent =
+          `${rows.length} models, ${ranked} ranked by Intelligence per blended $/1M tokens`;
+        return;
+      }
       const filterNote = excludeZeroPrice ? " (excluding free/promo models)" : "";
       document.getElementById("summary").textContent =
         `${rows.length} models ranked by ${payload.categories.map(c => c.label).join(", ")}${filterNote}`;
@@ -1338,6 +1411,89 @@ HTML_TEMPLATE = r"""<!doctype html>
       applySelection();
     }
 
+    function initializeGoFromCsv(csvRows) {
+      const headers = new Set(Object.keys(csvRows[0] || {}));
+      const required = [...payload.columns.map(column => column.key), "scraped_at"];
+      const missing = required.filter(key => !headers.has(key));
+      if (!csvRows.length || missing.length) {
+        throw new Error(`OpenCode Go CSV is missing required headers: ${missing.join(", ")}`);
+      }
+      const scrapedValues = csvRows.map(row => String(row.scraped_at || "").trim());
+      const canonicalScrapedAt = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+      if (scrapedValues.some(value => {
+        if (!canonicalScrapedAt.test(value)) return true;
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ||
+          parsed.toISOString().replace(".000Z", "Z") !== value;
+      }) || new Set(scrapedValues).size !== 1) {
+        throw new Error(
+          "OpenCode Go CSV scraped_at values must be identical canonical UTC timestamps"
+        );
+      }
+      const scrapedAt = scrapedValues[0];
+      const loadedRows = csvRows.map(raw => {
+        const intelligence = parseNumber(raw[goIntelligenceKey]);
+        const blend = parseNumber(raw[goBlendKey]);
+        const score = parseNumber(raw[goValueKey]);
+        const graph = intelligence === null || blend === null
+          ? {}
+          : { [goIntelligenceKey]: intelligence, [goBlendKey]: blend };
+        const cells = Object.fromEntries(payload.columns.map(column => {
+          const rawValue = raw[column.key];
+          const numericValue = parseNumber(rawValue);
+          return [column.key, {
+            display: formatValue(column.key, rawValue),
+            sort: numericValue ?? String(rawValue || ""),
+          }];
+        }));
+        return {
+          model: raw.model || "",
+          score,
+          cells,
+          graph,
+          pareto: { optimal: false, suboptimal: false },
+        };
+      });
+      const plottedRows = loadedRows.filter(row =>
+        Number.isFinite(row.graph[goIntelligenceKey]) &&
+        Number.isFinite(row.graph[goBlendKey])
+      );
+      const flags = computePareto(plottedRows, payload.graphCategories);
+      plottedRows.forEach((row, index) => { row.pareto = flags[index]; });
+      loadedRows.sort((left, right) => {
+        if (left.score === null) return right.score === null ? 0 : 1;
+        if (right.score === null) return -1;
+        return right.score - left.score;
+      });
+      rows = loadedRows;
+      payload.rows = loadedRows;
+      payload.scrapedAt = scrapedAt;
+      document.getElementById("dataFreshness").textContent =
+        `OpenCode Go pricing scraped: ${scrapedAt}`;
+      sortState = { key: goValueKey, direction: "desc" };
+      updateScoreScale();
+      updateSummary();
+      renderTable();
+      resetChartCanvas();
+      drawGraph();
+    }
+
+    function initializeEmbeddedGo() {
+      rows = embeddedRows.slice().sort((left, right) => {
+        const leftScore = parseNumber(left.cells[goValueKey]?.sort);
+        const rightScore = parseNumber(right.cells[goValueKey]?.sort);
+        if (leftScore === null) return rightScore === null ? 0 : 1;
+        if (rightScore === null) return -1;
+        return rightScore - leftScore;
+      });
+      payload.rows = rows;
+      updateScoreScale();
+      updateSummary();
+      renderTable();
+      resetChartCanvas();
+      drawGraph();
+    }
+
     function interpolate(a, b, t) {
       return Math.round(a + (b - a) * Math.max(0, Math.min(1, t)));
     }
@@ -1408,8 +1564,10 @@ HTML_TEMPLATE = r"""<!doctype html>
       const tbody = document.createElement("tbody");
       for (const row of rows) {
         const tr = document.createElement("tr");
-        tr.style.background = rowColor(row.score);
-        tr.style.color = textColor(row.score);
+        if (typeof row.score === "number" && Number.isFinite(row.score)) {
+          tr.style.background = rowColor(row.score);
+          tr.style.color = textColor(row.score);
+        }
         for (const column of payload.columns) {
           const td = document.createElement("td");
           td.textContent = row.cells[column.key].display;
@@ -1492,8 +1650,14 @@ HTML_TEMPLATE = r"""<!doctype html>
       return niceFraction * 10 ** exponent;
     }
 
+    function plottableRows(categories) {
+      return payload.rows.filter(row =>
+        categories.every(category => Number.isFinite(row.graph[category.key]))
+      );
+    }
+
     function metricRange(category) {
-      const values = payload.rows.map(row => row.graph[category.key]);
+      const values = plottableRows([category]).map(row => row.graph[category.key]);
       const min = Math.min(...values);
       const max = Math.max(...values);
       const rawSpan = Math.max(0.0001, max - min);
@@ -1752,7 +1916,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 
     function draw2D(categories) {
       const ranges = categories.map(metricRange);
-      const trend = fit2DTrend(payload.rows, categories, ranges);
+      const trend = fit2DTrend(plottableRows(categories), categories, ranges);
       let hover = null;
       const tooltip = document.getElementById("tooltip");
       const zoomIndicator = document.getElementById("zoomIndicator");
@@ -2038,7 +2202,7 @@ HTML_TEMPLATE = r"""<!doctype html>
           ctx.restore();
         }
 
-        const projected = payload.rows.filter(pointIn2DView).map(row => ({ row, ...project(row, width, height) }));
+        const projected = plottableRows(categories).filter(pointIn2DView).map(row => ({ row, ...project(row, width, height) }));
         const modelLabelBounds = {
           left: plotLeft + 4,
           right: plotRight - 4,
@@ -2223,7 +2387,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 
     function draw3D(categories) {
       const ranges = categories.map(metricRange);
-      const trend = fit3DTrendLine(payload.rows, categories, ranges);
+      const trend = fit3DTrendLine(plottableRows(categories), categories, ranges);
       const tooltip = document.getElementById("tooltip");
       const initialCamera = { rotationX: 0.62, rotationY: 0.78, zoom: 1.25 };
       const viewPresets = {
@@ -2448,7 +2612,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 
         drawTrendLine(ctx, width, height);
 
-        const projected = payload.rows.map(row => {
+        const projected = plottableRows(categories).map(row => {
           const point = {
             x: norm(row, categories[0], ranges[0]),
             y: norm(row, categories[1], ranges[1]),
@@ -2629,7 +2793,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       for (const category of categories) {
         lines.push(`${escapeHtml(category.label)}: ${row.graph[category.key]}`);
       }
-      lines.push(`Final Score: ${row.score.toFixed(2)}`);
+      lines.push(`${isOpenCodeGoView ? "Value Score" : "Final Score"}: ${row.score.toFixed(2)}`);
       if (row.pareto.optimal) lines.push("Pareto optimal");
       if (row.pareto.suboptimal) lines.push("Pareto suboptimal");
       return lines.join("<br>");
@@ -2685,15 +2849,21 @@ HTML_TEMPLATE = r"""<!doctype html>
       }
     });
     applyTheme(activeTheme());
-    applyUrlOptions();
-    applySelection();
-
-    fetchCsvFromPaths(["data/results.csv", "../data/results.csv"])
-      .then(text => initializeFromCsv(parseCsv(text)))
-      .catch(() => {
-        updateScoreScale();
-        updateSummary();
-      });
+    if (isOpenCodeGoView) {
+      initializeEmbeddedGo();
+      fetchCsvFromPaths(["data/opencode_go.csv", "../data/opencode_go.csv"])
+        .then(text => initializeGoFromCsv(parseCsv(text)))
+        .catch(() => {});
+    } else {
+      applyUrlOptions();
+      applySelection();
+      fetchCsvFromPaths(["data/results.csv", "../data/results.csv"])
+        .then(text => initializeFromCsv(parseCsv(text)))
+        .catch(() => {
+          updateScoreScale();
+          updateSummary();
+        });
+    }
   </script>
 </body>
 </html>
