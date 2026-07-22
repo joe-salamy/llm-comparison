@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from llm_comparison.convert_results import (
@@ -175,3 +175,21 @@ def test_update_upload_dates_rewrites_template_and_html_dates(tmp_path: Path) ->
     assert updated_files == 2
     assert "Data updated: May 20, 2026" in template.read_text(encoding="utf-8")
     assert 'const dataUpdated = "May 20, 2026"' in html.read_text(encoding="utf-8")
+
+
+def test_update_upload_dates_distinguishes_same_day_refreshes(tmp_path: Path) -> None:
+    html = tmp_path / "index.html"
+    html.write_text(
+        'Data updated: May 20, 2026\nconst dataUpdated = "May 20, 2026";\n',
+        encoding="utf-8",
+    )
+
+    update_upload_dates([html], datetime(2026, 5, 20, 14, 5, 6, tzinfo=UTC))
+    first_refresh = html.read_text(encoding="utf-8")
+    update_upload_dates([html], datetime(2026, 5, 20, 16, 7, 8, tzinfo=UTC))
+    second_refresh = html.read_text(encoding="utf-8")
+
+    assert "Data updated: 2026-05-20T14:05:06Z" in first_refresh
+    assert 'const dataUpdated = "2026-05-20T14:05:06Z"' in first_refresh
+    assert "Data updated: 2026-05-20T16:07:08Z" in second_refresh
+    assert 'const dataUpdated = "2026-05-20T16:07:08Z"' in second_refresh

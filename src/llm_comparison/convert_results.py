@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import re
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 DEFAULT_INPUT = Path("data/input.txt")
@@ -293,16 +293,28 @@ def format_display_date(uploaded_date: date) -> str:
     return f"{uploaded_date.strftime('%B')} {uploaded_date.day}, {uploaded_date.year}"
 
 
-def update_upload_dates(paths: list[Path], uploaded_date: date) -> int:
-    display_date = format_display_date(uploaded_date)
+def update_upload_dates(paths: list[Path], uploaded_at: date | datetime) -> int:
+    if isinstance(uploaded_at, datetime):
+        display_value = (
+            uploaded_at.astimezone(UTC)
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+    else:
+        display_value = format_display_date(uploaded_at)
+    current_value = (
+        r"(?:[A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}|"
+        r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z)"
+    )
     replacements = (
         (
-            re.compile(r"Data updated: [A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}"),
-            f"Data updated: {display_date}",
+            re.compile(rf"Data updated: {current_value}"),
+            f"Data updated: {display_value}",
         ),
         (
-            re.compile(r'const dataUpdated = "[A-Z][a-z]+ [0-9]{1,2}, [0-9]{4}"'),
-            f'const dataUpdated = "{display_date}"',
+            re.compile(rf'const dataUpdated = "{current_value}"'),
+            f'const dataUpdated = "{display_value}"',
         ),
     )
 

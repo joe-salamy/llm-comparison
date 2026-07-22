@@ -821,7 +821,7 @@ def test_report_contains_semantic_navigation_and_go_bootstrap(tmp_path: Path) ->
     )
     assert "initializeGoFromCsv(parseCsv(text))" in html
     assert 'window.location.protocol !== "file:"' in html
-    assert 'id="dataFreshness">Data updated: July 17, 2026</div>' in html
+    assert 'id="dataFreshness">Data updated: ' in html
     assert "`OpenCode Go pricing scraped: ${payload.scrapedAt}`" in html
     assert '[...payload.columns.map(column => column.key), "scraped_at"]' in html
     assert "payload.scrapedAt = scrapedAt;" in html

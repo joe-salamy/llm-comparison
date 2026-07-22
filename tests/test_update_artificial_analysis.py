@@ -4,7 +4,7 @@ import argparse
 import asyncio
 import subprocess
 import sys
-from datetime import date
+from datetime import UTC, date, datetime, tzinfo
 from pathlib import Path
 
 import pytest
@@ -107,7 +107,7 @@ def test_image_alt_fallback_when_text_empty() -> None:
     assert rows == [["Provider X"]]
 
 
-def test_async_main_writes_data_and_date_locally(
+def test_async_main_writes_data_and_timestamp_locally(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     capsys: CaptureFixture[str],
@@ -166,11 +166,11 @@ def test_async_main_writes_data_and_date_locally(
         "      Found 1 row across 1 column.",
         "[2/3] Saving generated data...",
         f"      Wrote 1 row to {csv_path}.",
-        "      Updated the data date in 2 files.",
+        "      Updated the data timestamp in 2 files.",
         "[3/3] Update complete.",
     ]
 
-def test_async_main_defaults_missing_uploaded_date_to_today(
+def test_async_main_defaults_missing_uploaded_date_to_current_utc_time(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     capsys: CaptureFixture[str],
@@ -178,12 +178,13 @@ def test_async_main_defaults_missing_uploaded_date_to_today(
     csv_path = tmp_path / "results.csv"
     html_path = tmp_path / "index.html"
     template_path = tmp_path / "template.py"
-    expected_date = date(2026, 6, 29)
+    expected_timestamp = datetime(2026, 6, 29, 12, 34, 56, tzinfo=UTC)
 
-    class FixedDate(date):
+    class FixedDateTime(datetime):
         @classmethod
-        def today(cls) -> FixedDate:
-            return cls(2026, 6, 29)
+        def now(cls, tz: tzinfo | None = None) -> FixedDateTime:
+            assert tz is UTC
+            return cls(2026, 6, 29, 12, 34, 56, tzinfo=tz)
 
     async def fake_scrape_table(
         url: str, *, timeout_ms: int, headed: bool
@@ -198,12 +199,14 @@ def test_async_main_defaults_missing_uploaded_date_to_today(
     ) -> list[str]:
         return ["model"]
 
-    def fake_update_upload_dates(paths: list[Path], value: date) -> int:
+    def fake_update_upload_dates(
+        paths: list[Path], value: date | datetime
+    ) -> int:
         assert paths == [template_path, html_path]
-        assert value == expected_date
+        assert value == expected_timestamp
         return len(paths)
 
-    monkeypatch.setattr(updater, "date", FixedDate)
+    monkeypatch.setattr(updater, "datetime", FixedDateTime)
     monkeypatch.setattr(updater, "scrape_table", fake_scrape_table)
     monkeypatch.setattr(updater, "write_table_csv", fake_write_table_csv)
     monkeypatch.setattr(updater, "update_upload_dates", fake_update_upload_dates)
@@ -223,7 +226,7 @@ def test_async_main_defaults_missing_uploaded_date_to_today(
         "      Found 1 row across 1 column.",
         "[2/3] Saving generated data...",
         f"      Wrote 1 row to {csv_path}.",
-        "      Updated the data date in 2 files.",
+        "      Updated the data timestamp in 2 files.",
         "[3/3] Update complete.",
     ]
 

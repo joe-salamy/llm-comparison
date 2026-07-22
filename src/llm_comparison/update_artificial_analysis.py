@@ -6,7 +6,7 @@ import re
 import sys
 import time
 from collections.abc import Sequence
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
@@ -263,11 +263,11 @@ async def async_main(args: argparse.Namespace) -> None:
     )
 
     print(f"[2/{stage_count}] Saving generated data...", flush=True)
-    uploaded_date = args.uploaded_date or date.today()
+    uploaded_at = args.uploaded_date or datetime.now(UTC)
     write_table_csv(display_headers, rows, args.csv)
-    updated_files = update_upload_dates([args.template, args.html], uploaded_date)
+    updated_files = update_upload_dates([args.template, args.html], uploaded_at)
     print(f"      Wrote {row_count} {row_label} to {args.csv}.")
-    print(f"      Updated the data date in {updated_files} files.")
+    print(f"      Updated the data timestamp in {updated_files} files.")
 
 
     print(f"[{stage_count}/{stage_count}] Update complete.")
