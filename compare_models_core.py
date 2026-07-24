@@ -38,7 +38,7 @@ DISPLAY_LABELS = {
     "critpt_pct": "CritPt",
     "apex_agents_aa_pct": "APEX-Agents-AA",
     "mmmu_pro_pct": "MMMU Pro",
-    "blended_usd_per_1m_tokens": "Blended (USD/1M Tokens)",
+    "cost_per_task": "Cost per Task",
     "input_price_usd_per_1m_tokens": "Input Price (USD/1M Tokens)",
     "output_price_usd_per_1m_tokens": "Output Price (USD/1M Tokens)",
     "median_tokens_per_second": "Median (Tokens/s)",
@@ -61,7 +61,7 @@ MAIN_COLUMNS = [
     ("context_window_tokens", "Context Window"),
     ("creator", "Creator"),
     ("artificial_analysis_intelligence_index", "Intelligence"),
-    ("blended_usd_per_1m_tokens", "Price"),
+    ("cost_per_task", "Cost per Task"),
     ("median_tokens_per_second", "Speed"),
     ("first_chunk_latency_seconds", "Latency"),
     ("total_response_time_seconds", "End-to-End Response Time"),
@@ -74,8 +74,9 @@ ALIASES = {
     "creator": "creator",
     "intelligence": "artificial_analysis_intelligence_index",
     "aa-intelligence": "artificial_analysis_intelligence_index",
-    "price": "blended_usd_per_1m_tokens",
-    "blended-price": "blended_usd_per_1m_tokens",
+    "price": "cost_per_task",
+    "cost": "cost_per_task",
+    "cost-per-task": "cost_per_task",
     "speed": "median_tokens_per_second",
     "tokens-per-second": "median_tokens_per_second",
     "latency": "first_chunk_latency_seconds",
@@ -85,7 +86,7 @@ ALIASES = {
     "total-response-time": "total_response_time_seconds",
 }
 
-LOWER_IS_BETTER_MARKERS = ("price", "usd", "latency", "time")
+LOWER_IS_BETTER_MARKERS = ("cost", "price", "usd", "latency", "time")
 FINAL_SCORE = "final_score"
 
 
@@ -143,7 +144,7 @@ def numeric_columns(headers: list[str], rows: list[dict[str, str]]) -> set[str]:
 
 
 def exclude_zero_price_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
-    price_key = "blended_usd_per_1m_tokens"
+    price_key = "cost_per_task"
     kept: list[dict[str, str]] = []
     for row in rows:
         price = parse_float(row.get(price_key))
@@ -315,6 +316,8 @@ def format_value(key: str, value: Any) -> str:
         return f"{parsed:g}"
     if key == "monthly_usage_usd":
         return f"${parsed:g}"
+    if key == "cost_per_task":
+        return f"${parsed:.2f}"
     if key in {
         "input_price_usd_per_1m_tokens",
         "output_price_usd_per_1m_tokens",

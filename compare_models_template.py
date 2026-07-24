@@ -712,7 +712,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       <div>
         <h1 id="pageTitle">LLM Comparison</h1>
         <div class="meta-stack">
-          <div class="meta" id="dataFreshness">Data updated: July 22, 2026</div>
+          <div class="meta" id="dataFreshness">Data updated: 2026-07-24T18:56:47Z</div>
           <div class="meta" id="summary"></div>
         </div>
       </div>
@@ -788,7 +788,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         <p>This static report ranks LLMs from the included <code>data/results.csv</code> data file. The source data was copied from Artificial Analysis, converted locally, and published here so viewers can change comparisons without collecting the data themselves.</p>
         <ul>
           <li>Higher is better for quality, benchmark, context, and speed metrics.</li>
-          <li>Lower is better for price, latency, and time metrics.</li>
+          <li>Lower is better for cost, price, latency, and time metrics.</li>
           <li>The final score is the relative geometric mean of actual metric ratios. A score of 100 matches fixed reference values; higher is better.</li>
           <li>Models missing any selected numeric metric, or containing a nonpositive selected value, are excluded from that run.</li>
         </ul>
@@ -798,7 +798,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   </main>
   <script>
     const payload = __PAYLOAD__;
-    const dataUpdated = "July 22, 2026";
+    const dataUpdated = "2026-07-24T18:56:47Z";
     const displayLabels = {
       model: "Model",
       context_window_tokens: "Context Window",
@@ -820,7 +820,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       critpt_pct: "CritPt",
       apex_agents_aa_pct: "APEX-Agents-AA",
       mmmu_pro_pct: "MMMU Pro",
-      blended_usd_per_1m_tokens: "Blended (USD/1M Tokens)",
+      cost_per_task: "Cost per Task",
       input_price_usd_per_1m_tokens: "Input Price (USD/1M Tokens)",
       output_price_usd_per_1m_tokens: "Output Price (USD/1M Tokens)",
       median_tokens_per_second: "Median (Tokens/s)",
@@ -870,13 +870,13 @@ HTML_TEMPLATE = r"""<!doctype html>
     let selectedCategories = initialSelectedCategories.slice();
     let excludeZeroPrice = true;
     let rows = payload.rows.slice();
-    const lowerIsBetterMarkers = ["price", "usd", "latency", "time"];
+    const lowerIsBetterMarkers = ["cost", "price", "usd", "latency", "time"];
     const mainColumnKeys = [
       "model",
       "context_window_tokens",
       "creator",
       "artificial_analysis_intelligence_index",
-      "blended_usd_per_1m_tokens",
+      "cost_per_task",
       "median_tokens_per_second",
       "first_chunk_latency_seconds",
       "total_response_time_seconds",
@@ -884,7 +884,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     ];
     const coreCategoryKeys = [
       "artificial_analysis_intelligence_index",
-      "blended_usd_per_1m_tokens",
+      "cost_per_task",
       "median_tokens_per_second",
       "first_chunk_latency_seconds",
       "total_response_time_seconds",
@@ -1031,6 +1031,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       if (key === goValueKey) return parsed.toFixed(2);
       if (key === goIntelligenceKey) return general();
       if (key === "monthly_usage_usd") return `$${general()}`;
+      if (key === "cost_per_task") return `$${parsed.toFixed(2)}`;
       if ([
         "input_price_usd_per_1m_tokens",
         "output_price_usd_per_1m_tokens",
@@ -1162,7 +1163,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     function scoreSourceRows(categories) {
       const completeRows = [];
       for (const raw of sourceRows) {
-        if (excludeZeroPrice && parseNumber(raw.blended_usd_per_1m_tokens) === 0) continue;
+        if (excludeZeroPrice && parseNumber(raw.cost_per_task) === 0) continue;
         const graph = {};
         let complete = true;
         for (const category of categories) {
@@ -1202,8 +1203,8 @@ HTML_TEMPLATE = r"""<!doctype html>
     function scoreEmbeddedRows(categories) {
       const completeRows = [];
       for (const original of embeddedRows) {
-        const priceCell = original.cells.blended_usd_per_1m_tokens;
-        const priceValue = priceCell?.sort ?? original.graph.blended_usd_per_1m_tokens;
+        const priceCell = original.cells.cost_per_task;
+        const priceValue = priceCell?.sort ?? original.graph.cost_per_task;
         if (excludeZeroPrice && priceValue === 0) continue;
         const graph = {};
         let complete = true;

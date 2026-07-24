@@ -40,7 +40,7 @@ python -m llm_comparison.update_all_data
 ```
 
 This is the complete refresh workflow. It scrapes and writes Artificial Analysis
-data and updates the report-wide display date first, then scrapes OpenCode Go
+data and updates the report-wide UTC timestamp first, then scrapes OpenCode Go
 live pricing and joins it to the newly written Artificial Analysis CSV. Finally,
 it invokes the GitHub Pages publisher once. The publisher creates one combined
 source-data commit containing both generated datasets and report artifacts, plus
@@ -74,7 +74,7 @@ The report includes a sortable HTML table with the original selected columns plu
 
 Models are scored from their actual metric values using a relative geometric mean:
 
-- Each higher-is-better metric contributes `value / reference`; price, latency, and time metrics contribute `reference / value`.
+- Each higher-is-better metric contributes `value / reference`; cost, price, latency, and time metrics contribute `reference / value`.
 - Fixed references are 50 for percentage/index metrics, 100,000 for context windows, 100 for token-speed metrics, and 1 otherwise.
 - `Final Score` is 100 times the geometric mean of those ratios. A score of 100 matches the fixed references for the selected metrics.
 - Adding or removing other models does not change an existing model's score or rank.
@@ -86,7 +86,7 @@ List available categories and aliases:
 compare-models --list-categories
 ```
 
-Common aliases include `intelligence`, `price`, `speed`, `latency`, and `response-time`.
+The `price`, `cost`, and `cost-per-task` aliases select Artificial Analysis Cost per Task. Other common aliases include `intelligence`, `speed`, `latency`, and `response-time`.
 
 ## Convert Raw Results
 
@@ -100,7 +100,7 @@ python -m llm_comparison.update_opencode_go
 ```
 
 `update-artificial-analysis` scrapes the Artificial Analysis leaderboard, writes
-`data/results.csv`, and updates the report-wide human-readable display date in
+`data/results.csv`, and updates the report-wide UTC scrape timestamp in
 `src/llm_comparison/compare_models_template.py` and `public/index.html`.
 `update-opencode-go` scrapes live OpenCode Go pricing and joins it to the current
 `data/results.csv`. These commands never commit or publish, and neither alone is
@@ -111,8 +111,8 @@ pricing scrape completion time. One value is repeated on every row in UTC RFC
 3339 whole-second form (`YYYY-MM-DDTHH:MM:SSZ`). The exact same value appears in
 the report metadata at `?view=opencode-go`; select the **OpenCode Go value**
 navigation item or open `https://<site>/index.html?view=opencode-go` directly.
-The default Comparison view continues to show the separate report-wide
-Artificial Analysis display date.
+The default Comparison view shows the separate Artificial Analysis scrape time
+in the same UTC RFC 3339 whole-second format.
 
 If the automated Artificial Analysis updater is unavailable, use the installed
 `convert-results` command, or run `python -m llm_comparison.convert_results`, as
