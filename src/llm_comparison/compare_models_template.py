@@ -393,6 +393,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
     .info-wrap {
       color: var(--control-ink);
+      margin-top: 16px;
     }
     .info-grid {
       display: grid;
@@ -604,13 +605,27 @@ HTML_TEMPLATE = r"""<!doctype html>
       display: inline-block;
       border-top: 3px solid var(--trend);
     }
-    #chart {
+    #chart,
+    #paretoChart {
       width: 100%;
       height: 560px;
       display: block;
       border: 1px solid var(--line);
       border-radius: 6px;
       background: var(--chart-bg);
+    }
+    .table-section {
+      margin-bottom: 16px;
+    }
+    .table-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      color: var(--heading);
+      font-size: 15px;
+      font-weight: 720;
     }
     .table-wrap {
       overflow: auto;
@@ -697,7 +712,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       .clear-button { width: 100%; }
       .filter-line { justify-content: stretch; }
       .filter-option { width: 100%; }
-      #chart { height: 440px; }
+      #chart, #paretoChart { height: 440px; }
       th, td { padding: 8px; }
     }
   </style>
@@ -712,7 +727,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       <div>
         <h1 id="pageTitle">LLM Comparison</h1>
         <div class="meta-stack">
-          <div class="meta" id="dataFreshness">Data updated: 2026-07-24T18:56:47Z</div>
+          <div class="meta" id="dataFreshness">Data updated: 2026-07-24T19:24:27Z</div>
           <div class="meta" id="summary"></div>
         </div>
       </div>
@@ -751,6 +766,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         <div id="chartTitle"></div>
         <div class="chart-actions">
           <button class="chart-button" id="fullscreenChart" type="button">Full screen</button>
+          <button class="chart-button" id="saveChart" type="button">Save as image</button>
           <button class="chart-button" id="resetView" type="button" hidden>Reset view</button>
           <div class="legend">
             <span><i class="dot green"></i>Pareto optimal</span>
@@ -779,9 +795,29 @@ HTML_TEMPLATE = r"""<!doctype html>
       </div>
       <div class="tooltip" id="tooltip"></div>
     </section>
-    <div class="table-wrap">
-      <table id="resultsTable"></table>
-    </div>
+    <section class="table-section" aria-labelledby="resultsTitle">
+      <div class="table-title">
+        <span id="resultsTitle">Results</span>
+        <button class="chart-button" id="saveTable" type="button">Save as image</button>
+      </div>
+      <div class="table-wrap">
+        <table id="resultsTable"></table>
+      </div>
+    </section>
+    <section class="chart-wrap" id="paretoChartSection" hidden>
+      <div class="chart-title">
+        <div id="paretoChartTitle">Pareto-optimal models</div>
+        <div class="chart-actions">
+          <button class="chart-button" id="saveParetoChart" type="button">Save as image</button>
+          <div class="legend">
+            <span><i class="dot green"></i>Pareto optimal</span>
+          </div>
+        </div>
+      </div>
+      <div class="chart-canvas-wrap">
+        <canvas id="paretoChart"></canvas>
+      </div>
+    </section>
     <section class="info-wrap" aria-labelledby="aboutTitle">
       <h2 class="info-title" id="aboutTitle">About this comparison</h2>
       <div class="info-grid" id="aboutContent">
@@ -798,7 +834,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   </main>
   <script>
     const payload = __PAYLOAD__;
-    const dataUpdated = "2026-07-24T18:56:47Z";
+    const dataUpdated = "2026-07-24T19:24:27Z";
     const displayLabels = {
       model: "Model",
       context_window_tokens: "Context Window",
@@ -895,6 +931,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     let medianScore = 50;
     let chartDisposers = [];
     let chartRender = null;
+    let paretoRender = null;
     const themeStorageKey = "llmComparison.theme";
     const themeMediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
 
@@ -938,6 +975,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       document.documentElement.style.colorScheme = theme;
       updateThemeToggle();
       if (chartRender) chartRender();
+      if (paretoRender) paretoRender();
     }
 
     function toggleTheme() {
@@ -1273,6 +1311,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       const canvas = document.getElementById("chart");
       const replacement = canvas.cloneNode(false);
       canvas.replaceWith(replacement);
+      paretoRender = null;
       document.getElementById("tooltip").style.display = "none";
     }
 
@@ -1307,6 +1346,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       renderTable();
       resetChartCanvas();
       drawGraph();
+      drawParetoGraph();
       if (syncUrl) updateOptionsUrl();
     }
 
@@ -1467,6 +1507,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       renderTable();
       resetChartCanvas();
       drawGraph();
+      drawParetoGraph();
     }
 
     function initializeEmbeddedGo() {
@@ -1483,6 +1524,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       renderTable();
       resetChartCanvas();
       drawGraph();
+      drawParetoGraph();
     }
 
     function interpolate(a, b, t) {
@@ -1613,8 +1655,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       return isChartFullscreen() ? 2 : 1;
     }
 
-    function setupCanvas() {
-      const canvas = document.getElementById("chart");
+    function setupCanvas(canvasId = "chart") {
+      const canvas = document.getElementById(canvasId);
       const ratio = chartRenderRatio();
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.max(1, Math.floor(rect.width * ratio));
@@ -2779,6 +2821,268 @@ HTML_TEMPLATE = r"""<!doctype html>
       render();
     }
 
+    function drawParetoGraph() {
+      const section = document.getElementById("paretoChartSection");
+      const categories = chartCategories();
+      const optimalRows = plottableRows(categories).filter(row => row.pareto.optimal);
+      if (!categories.length || !optimalRows.length) {
+        section.hidden = true;
+        paretoRender = null;
+        return;
+      }
+      section.hidden = false;
+      document.getElementById("paretoChartTitle").textContent =
+        `Pareto-optimal models · ${optimalRows.length} model${optimalRows.length === 1 ? "" : "s"}`;
+      const ranges = categories.map(metricRange);
+
+      if (categories.length === 2) {
+        paretoRender = () => {
+          const { ctx, width, height } = setupCanvas("paretoChart");
+          const margins = { top: 42, right: 42, bottom: 74, left: 92 };
+          const plotLeft = margins.left;
+          const plotRight = width - margins.right;
+          const plotTop = margins.top;
+          const plotBottom = height - margins.bottom;
+          const plotWidth = plotRight - plotLeft;
+          const plotHeight = plotBottom - plotTop;
+          ctx.clearRect(0, 0, width, height);
+          ctx.font = "12px sans-serif";
+          ctx.strokeStyle = cssColor("--chart-grid-major");
+          ctx.fillStyle = cssColor("--chart-text");
+          for (let index = 0; index <= 5; index += 1) {
+            const ratio = index / 5;
+            const x = plotLeft + ratio * plotWidth;
+            const y = plotBottom - ratio * plotHeight;
+            ctx.beginPath();
+            ctx.moveTo(x, plotTop);
+            ctx.lineTo(x, plotBottom);
+            ctx.moveTo(plotLeft, y);
+            ctx.lineTo(plotRight, y);
+            ctx.stroke();
+            ctx.fillText(formatTick(ranges[0].min + ratio * ranges[0].span), x - 14, plotBottom + 22);
+            ctx.textAlign = "right";
+            ctx.fillText(formatTick(ranges[1].min + ratio * ranges[1].span), plotLeft - 12, y + 4);
+            ctx.textAlign = "left";
+          }
+          ctx.strokeStyle = cssColor("--chart-axis");
+          ctx.lineWidth = 2.25;
+          ctx.beginPath();
+          ctx.moveTo(plotLeft, plotTop);
+          ctx.lineTo(plotLeft, plotBottom);
+          ctx.lineTo(plotRight, plotBottom);
+          ctx.stroke();
+          ctx.fillStyle = cssColor("--chart-title");
+          ctx.font = "700 16px sans-serif";
+          drawFixedContainedLabel(
+            ctx,
+            `${categories[0].label}${categories[0].lowerIsBetter ? " (lower better)" : " (higher better)"}`,
+            plotLeft,
+            height - 24,
+            { left: 6, right: width - 6, top: 6, bottom: height - 6 },
+          );
+          ctx.save();
+          ctx.translate(24, plotBottom);
+          ctx.rotate(-Math.PI / 2);
+          ctx.fillText(
+            `${categories[1].label}${categories[1].lowerIsBetter ? " (lower better)" : " (higher better)"}`,
+            0,
+            0,
+          );
+          ctx.restore();
+          const bounds = {
+            left: plotLeft + 4,
+            right: plotRight - 4,
+            top: plotTop + 4,
+            bottom: plotBottom - 4,
+          };
+          const occupied = [];
+          for (const row of optimalRows) {
+            const x = plotLeft + normalizedMetric(row, categories[0], ranges[0]) * plotWidth;
+            const y = plotBottom - normalizedMetric(row, categories[1], ranges[1]) * plotHeight;
+            ctx.beginPath();
+            ctx.fillStyle = cssColor("--green");
+            ctx.arc(x, y, 5.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = cssColor("--chart-optimal-label");
+            ctx.font = "700 12px sans-serif";
+            drawLaidOutLabel(ctx, row.model, x, y, bounds, occupied, {
+              halo: true,
+              haloWidth: 2,
+              labelGap: 4,
+            });
+          }
+        };
+      } else {
+        paretoRender = () => {
+          const { ctx, width, height } = setupCanvas("paretoChart");
+          const rotationX = 0.62;
+          const rotationY = 0.78;
+          const scale = Math.min(width, height) * 0.35;
+          const rotate = point => {
+            const cosY = Math.cos(rotationY);
+            const sinY = Math.sin(rotationY);
+            const cosX = Math.cos(rotationX);
+            const sinX = Math.sin(rotationX);
+            const x = point.x * cosY - point.z * sinY;
+            const z = point.x * sinY + point.z * cosY;
+            return { x, y: point.y * cosX - z * sinX, z: point.y * sinX + z * cosX };
+          };
+          const project = point => {
+            const rotated = rotate(point);
+            return {
+              x: width / 2 + rotated.x * scale,
+              y: height / 2 - rotated.y * scale,
+              depth: rotated.z,
+            };
+          };
+          ctx.clearRect(0, 0, width, height);
+          ctx.strokeStyle = cssColor("--chart-axis-strong");
+          ctx.lineWidth = 2.4;
+          const origin = project({ x: -1, y: -1, z: -1 });
+          const axes = [
+            { point: { x: 1.2, y: -1, z: -1 }, category: categories[0] },
+            { point: { x: -1, y: 1.2, z: -1 }, category: categories[1] },
+            { point: { x: -1, y: -1, z: 1.2 }, category: categories[2] },
+          ];
+          ctx.fillStyle = cssColor("--chart-title");
+          ctx.font = "700 15px sans-serif";
+          for (const axis of axes) {
+            const end = project(axis.point);
+            ctx.beginPath();
+            ctx.moveTo(origin.x, origin.y);
+            ctx.lineTo(end.x, end.y);
+            ctx.stroke();
+            drawFixedContainedLabel(
+              ctx,
+              `${axis.category.label}${axis.category.lowerIsBetter ? " ↓" : " ↑"}`,
+              end.x + 6,
+              end.y + 4,
+              { left: 6, right: width - 6, top: 6, bottom: height - 6 },
+            );
+          }
+          const projected = optimalRows.map(row => {
+            const point = {
+              x: normalizedMetric(row, categories[0], ranges[0]) * 2 - 1,
+              y: normalizedMetric(row, categories[1], ranges[1]) * 2 - 1,
+              z: normalizedMetric(row, categories[2], ranges[2]) * 2 - 1,
+            };
+            return { row, ...project(point) };
+          }).sort((left, right) => left.depth - right.depth);
+          const occupied = [];
+          for (const point of projected) {
+            ctx.beginPath();
+            ctx.fillStyle = cssColor("--green");
+            ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = cssColor("--chart-optimal-label");
+            ctx.font = "700 12px sans-serif";
+            drawLaidOutLabel(
+              ctx,
+              point.row.model,
+              point.x,
+              point.y,
+              { left: 8, right: width - 8, top: 8, bottom: height - 8 },
+              occupied,
+              { halo: true, haloWidth: 2, labelGap: 4 },
+            );
+          }
+        };
+      }
+      paretoRender();
+    }
+
+    function safeFilename(value) {
+      return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    }
+
+    function downloadCanvas(canvas, filename) {
+      canvas.toBlob(blob => {
+        if (!blob) return;
+        const link = document.createElement("a");
+        link.download = filename;
+        link.href = URL.createObjectURL(blob);
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 0);
+      }, "image/png");
+    }
+
+    function exportChart(canvasId, title) {
+      const source = document.getElementById(canvasId);
+      const headerHeight = 96;
+      const output = document.createElement("canvas");
+      output.width = source.width;
+      output.height = source.height + headerHeight;
+      const ctx = output.getContext("2d");
+      ctx.fillStyle = cssColor("--chart-bg");
+      ctx.fillRect(0, 0, output.width, output.height);
+      ctx.fillStyle = cssColor("--chart-title");
+      ctx.font = "700 30px sans-serif";
+      ctx.fillText(title, 32, 42);
+      ctx.fillStyle = cssColor("--chart-text");
+      ctx.font = "22px sans-serif";
+      ctx.fillText(payload.categories.map(category => category.label).join(" · "), 32, 74);
+      ctx.drawImage(source, 0, headerHeight);
+      downloadCanvas(output, `${safeFilename(title)}.png`);
+    }
+
+    function exportTable() {
+      const table = document.getElementById("resultsTable");
+      const tableWidth = Math.ceil(table.getBoundingClientRect().width);
+      const tableHeight = Math.ceil(table.getBoundingClientRect().height);
+      const scale = 2;
+      const margin = 24;
+      const headerHeight = 64;
+      const output = document.createElement("canvas");
+      output.width = (tableWidth + margin * 2) * scale;
+      output.height = (tableHeight + headerHeight + margin * 2) * scale;
+      const ctx = output.getContext("2d");
+      ctx.scale(scale, scale);
+      ctx.fillStyle = cssColor("--panel");
+      ctx.fillRect(0, 0, output.width / scale, output.height / scale);
+      ctx.fillStyle = cssColor("--heading");
+      ctx.font = "700 22px sans-serif";
+      ctx.fillText("LLM comparison results", margin, margin + 24);
+      ctx.fillStyle = cssColor("--muted");
+      ctx.font = "13px sans-serif";
+      ctx.fillText(document.getElementById("summary").textContent, margin, margin + 48);
+      const originY = margin + headerHeight;
+      const headerCells = [...table.tHead.rows[0].cells];
+      const columnLefts = headerCells.map(cell => cell.offsetLeft);
+      const columnWidths = headerCells.map(cell => cell.offsetWidth);
+      for (const [rowIndex, row] of [...table.rows].entries()) {
+        const y = originY + row.offsetTop;
+        const rowStyle = getComputedStyle(row);
+        ctx.fillStyle = rowIndex === 0 ? cssColor("--table-head") :
+          (rowStyle.backgroundColor === "rgba(0, 0, 0, 0)" ? cssColor("--panel") : rowStyle.backgroundColor);
+        ctx.fillRect(margin, y, tableWidth, row.offsetHeight);
+        for (const [columnIndex, cell] of [...row.cells].entries()) {
+          const x = margin + columnLefts[columnIndex];
+          const width = columnWidths[columnIndex];
+          const style = getComputedStyle(cell);
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(x + 1, y, width - 2, row.offsetHeight);
+          ctx.clip();
+          ctx.fillStyle = rowIndex === 0 ? cssColor("--heading") : style.color;
+          ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+          ctx.textBaseline = "middle";
+          ctx.textAlign = cell.classList.contains("numeric") ? "right" : "left";
+          const text = rowIndex === 0 && cell.classList.contains("sort-active")
+            ? `${cell.textContent} ${cell.dataset.sortMark}`
+            : cell.textContent;
+          const textX = cell.classList.contains("numeric") ? x + width - 11 : x + 11;
+          ctx.fillText(text, textX, y + row.offsetHeight / 2);
+          ctx.restore();
+        }
+        ctx.strokeStyle = cssColor("--table-row-border");
+        ctx.beginPath();
+        ctx.moveTo(margin, y + row.offsetHeight - 0.5);
+        ctx.lineTo(margin + tableWidth, y + row.offsetHeight - 0.5);
+        ctx.stroke();
+      }
+      downloadCanvas(output, "llm-comparison-results.png");
+    }
+
     function tooltipText(row, categories) {
       const lines = [`<strong>${escapeHtml(row.model)}</strong>`];
       for (const category of categories) {
@@ -2810,6 +3114,13 @@ HTML_TEMPLATE = r"""<!doctype html>
     themeMediaQuery?.addEventListener("change", () => {
       if (!readStoredTheme()) applyTheme(preferredSystemTheme());
     });
+    document.getElementById("saveChart").addEventListener("click", () => {
+      exportChart("chart", document.getElementById("chartTitle").textContent);
+    });
+    document.getElementById("saveParetoChart").addEventListener("click", () => {
+      exportChart("paretoChart", document.getElementById("paretoChartTitle").textContent);
+    });
+    document.getElementById("saveTable").addEventListener("click", exportTable);
     document.getElementById("fullscreenChart").addEventListener("click", async () => {
       const section = chartSection();
       if (section.classList.contains("fullscreen-fallback")) {

@@ -376,6 +376,62 @@ def test_pareto_chart_styles_prioritize_optimal_when_flags_overlap(
     assert optimal_opacity_priority in html
 
 
+def test_report_exports_images_and_renders_separate_pareto_chart(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "report.html"
+    rows = [
+        {
+            "model": "winner",
+            "quality": "10",
+            "cost": "1",
+            "_raw_values": {"quality": 10.0, "cost": 1.0},
+            FINAL_SCORE: 100.0,
+        },
+        {
+            "model": "other",
+            "quality": "5",
+            "cost": "2",
+            "_raw_values": {"quality": 5.0, "cost": 2.0},
+            FINAL_SCORE: 50.0,
+        },
+    ]
+
+    write_html(
+        output,
+        rows,
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality", "cost"],
+        [
+            {"optimal": True, "suboptimal": False},
+            {"optimal": False, "suboptimal": True},
+        ],
+    )
+
+    html = output.read_text(encoding="utf-8")
+    table_index = html.index('class="table-section"')
+    pareto_index = html.index('id="paretoChartSection"')
+    about_index = html.index('id="aboutTitle"')
+
+    assert table_index < pareto_index < about_index
+    assert 'id="saveChart"' in html
+    assert 'id="saveTable"' in html
+    assert 'id="saveParetoChart"' in html
+    assert 'id="paretoChart"' in html
+    assert "plottableRows(categories).filter(row => row.pareto.optimal)" in html
+    assert "function exportChart(canvasId, title)" in html
+    assert "function exportTable()" in html
+    assert "for (const [rowIndex, row] of [...table.rows].entries())" in html
+    assert "downloadCanvas(output, \"llm-comparison-results.png\")" in html
+    assert ".table-section {\n      margin-bottom: 16px;" in html
+    info_spacing = (
+        ".info-wrap {\n"
+        "      color: var(--control-ink);\n"
+        "      margin-top: 16px;"
+    )
+    assert info_spacing in html
+
+
 def test_mobile_3d_chart_supports_touch_controls_and_fullscreen_fallback(
     tmp_path: Path,
 ) -> None:
