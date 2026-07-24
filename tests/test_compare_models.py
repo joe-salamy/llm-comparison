@@ -418,6 +418,18 @@ def test_report_exports_images_and_renders_separate_pareto_chart(
     assert 'id="saveTable"' in html
     assert 'id="saveParetoChart"' in html
     assert 'id="paretoChart"' in html
+    assert 'id="resetParetoView"' in html
+    assert 'id="paretoZoomIndicator"' in html
+    assert 'id="paretoViewCube"' in html
+    assert "function zoomAt(point, factor, width, height)" in html
+    assert "function panBy(deltaX, deltaY, width, height)" in html
+    assert "function rotateFromPoint(point)" in html
+    assert 'trackChartListener(canvas, "wheel"' in html
+    assert 'trackChartListener(canvas, "touchmove"' in html
+    assert (
+        'trackChartListener(document.getElementById("resetParetoView"), "click"'
+        in html
+    )
     assert "plottableRows(categories).filter(row => row.pareto.optimal)" in html
     assert "function exportChart(canvasId, title)" in html
     assert "function exportTable()" in html
