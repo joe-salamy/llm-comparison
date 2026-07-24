@@ -322,7 +322,7 @@ def test_2d_chart_supports_zoom_pan_reset_and_zoom_number(tmp_path: Path) -> Non
     assert "function zoom2DAt(" in html
     assert "function pan2DBy(" in html
     assert "function pointIn2DView(row)" in html
-    assert "plottableRows(categories).filter(pointIn2DView).map" in html
+    assert "config.rows.filter(pointIn2DView).map" in html
     hover_clear = (
         'hover = null;\n        tooltip.style.display = "none";\n        render();'
     )
@@ -333,8 +333,8 @@ def test_2d_chart_supports_zoom_pan_reset_and_zoom_number(tmp_path: Path) -> Non
     assert "const wasTap = changedTouch && touchStart && !touchMoved" in html
     assert 'trackChartListener(canvas, "wheel"' in html
     assert (
-        'trackChartListener(document.getElementById("resetView"), "click", reset2DView)'
-        in html
+        'trackChartListener(document.getElementById(config.resetButtonId), '
+        '"click", reset2DView)' in html
     )
 
 
@@ -374,6 +374,8 @@ def test_pareto_chart_styles_prioritize_optimal_when_flags_overlap(
     assert '"pareto": {"optimal": true, "suboptimal": true}' in html
     assert html.count(optimal_label_priority) == 2
     assert optimal_opacity_priority in html
+    assert "Number(right.row.pareto.optimal) - Number(left.row.pareto.optimal)" in html
+    assert "best.overlapCount > 0 || best.lineCount > 0" in html
 
 
 def test_report_exports_images_and_renders_separate_pareto_chart(
@@ -421,16 +423,20 @@ def test_report_exports_images_and_renders_separate_pareto_chart(
     assert 'id="resetParetoView"' in html
     assert 'id="paretoZoomIndicator"' in html
     assert 'id="paretoViewCube"' in html
-    assert "function zoomAt(point, factor, width, height)" in html
-    assert "function panBy(deltaX, deltaY, width, height)" in html
+    assert 'id="fullscreenParetoChart"' in html
+    assert 'id="paretoTooltip"' in html
+    assert "function zoom2DAt(point, factor, width, height)" in html
+    assert "function pan2DBy(deltaX, deltaY, width, height)" in html
     assert "function rotateFromPoint(point)" in html
     assert 'trackChartListener(canvas, "wheel"' in html
     assert 'trackChartListener(canvas, "touchmove"' in html
-    assert (
-        'trackChartListener(document.getElementById("resetParetoView"), "click"'
-        in html
-    )
+    assert 'resetButtonId: "resetParetoView"' in html
+    assert 'canvasId: "paretoChart"' in html
+    assert 'tooltipId: "paretoTooltip"' in html
+    assert 'sectionId: "paretoChartSection"' in html
     assert "plottableRows(categories).filter(row => row.pareto.optimal)" in html
+    assert "if (categories.length === 2) draw2D(categories, config)" in html
+    assert "else draw3D(categories, config)" in html
     assert "function exportChart(canvasId, title)" in html
     assert "function exportTable()" in html
     assert "for (const [rowIndex, row] of [...table.rows].entries())" in html
@@ -473,13 +479,25 @@ def test_mobile_3d_chart_supports_touch_controls_and_fullscreen_fallback(
     assert "touch-action: none;" in html
     assert 'trackChartListener(canvas, "touchmove"' in html
     assert "pinchDistance" in html
-    assert "function enterFullscreenFallback()" in html
+    assert "function enterFullscreenFallback(sectionId, buttonId)" in html
     assert "section.requestFullscreen" in html
+    assert (
+        'toggleChartFullscreen("paretoChartSection", "fullscreenParetoChart")'
+        in html
+    )
     chart_section_start = html.index('<section class="chart-wrap" id="chartSection"')
     chart_section = html[
         chart_section_start : html.index("</section>", chart_section_start)
     ]
     assert '<div class="tooltip" id="tooltip"></div>' in chart_section
+    pareto_section_start = html.index(
+        '<section class="chart-wrap" id="paretoChartSection"'
+    )
+    pareto_section = html[
+        pareto_section_start : html.index("</section>", pareto_section_start)
+    ]
+    assert '<div class="tooltip" id="paretoTooltip"></div>' in pareto_section
+    assert "function show3DTooltip(clientPoint)" in html
 
 
 def test_report_supports_shareable_ordered_metric_urls(tmp_path: Path) -> None:

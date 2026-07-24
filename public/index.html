@@ -497,8 +497,8 @@
       overflow: auto;
       -webkit-overflow-scrolling: touch;
     }
-    .chart-wrap:fullscreen #chart,
-    .chart-wrap.fullscreen-fallback #chart {
+    .chart-wrap:fullscreen canvas,
+    .chart-wrap.fullscreen-fallback canvas {
       height: 100%;
       min-width: 0;
     }
@@ -806,15 +806,19 @@
       <div class="chart-title">
         <div id="paretoChartTitle">Pareto-optimal models</div>
         <div class="chart-actions">
+          <button class="chart-button" id="fullscreenParetoChart" type="button">Full screen</button>
           <button class="chart-button" id="resetParetoView" type="button">Reset view</button>
           <button class="chart-button" id="saveParetoChart" type="button">Save as image</button>
           <div class="legend">
             <span><i class="dot green"></i>Pareto optimal</span>
+            <span><i class="line-sample"></i>Linear trend</span>
           </div>
         </div>
       </div>
       <div class="chart-canvas-wrap">
-        <canvas id="paretoChart"></canvas>
+        <div class="chart-scroll" id="paretoChartScroll">
+          <canvas id="paretoChart"></canvas>
+        </div>
         <div class="view-cube" id="paretoViewCube" aria-label="Pareto 3D view controls" hidden>
           <button type="button" data-view="top" title="Top view">Top</button>
           <button type="button" data-view="isometric" title="Isometric view">Iso</button>
@@ -828,6 +832,7 @@
         </div>
         <div class="zoom-indicator" id="paretoZoomIndicator" aria-live="polite">1.00x</div>
       </div>
+      <div class="tooltip" id="paretoTooltip"></div>
     </section>
     <section class="info-wrap" aria-labelledby="aboutTitle">
       <h2 class="info-title" id="aboutTitle">About this comparison</h2>
@@ -1319,11 +1324,14 @@
       for (const dispose of chartDisposers) dispose();
       chartDisposers = [];
       chartRender = null;
-      const canvas = document.getElementById("chart");
-      const replacement = canvas.cloneNode(false);
-      canvas.replaceWith(replacement);
       paretoRender = null;
-      document.getElementById("tooltip").style.display = "none";
+      for (const canvasId of ["chart", "paretoChart"]) {
+        const canvas = document.getElementById(canvasId);
+        canvas.replaceWith(canvas.cloneNode(false));
+      }
+      for (const tooltipId of ["tooltip", "paretoTooltip"]) {
+        document.getElementById(tooltipId).style.display = "none";
+      }
     }
 
     function trackChartListener(target, type, handler, options) {
@@ -1628,47 +1636,51 @@
       if (row.pareto.suboptimal) return cssColor("--red");
       return cssColor("--blue");
     }
-    function chartSection() {
-      return document.getElementById("chartSection");
+    function chartSection(sectionId = "chartSection") {
+      return document.getElementById(sectionId);
     }
 
-    function isChartFullscreen() {
-      const section = chartSection();
+    function isChartFullscreen(sectionId = "chartSection") {
+      const section = chartSection(sectionId);
       return document.fullscreenElement === section || section.classList.contains("fullscreen-fallback");
     }
 
-    function updateFullscreenButton() {
-      const button = document.getElementById("fullscreenChart");
-      button.textContent = isChartFullscreen() ? "Exit full screen" : "Full screen";
+    function chartRenderFor(sectionId) {
+      return sectionId === "paretoChartSection" ? paretoRender : chartRender;
     }
 
-    function enterFullscreenFallback() {
-      chartSection().classList.add("fullscreen-fallback");
+    function updateFullscreenButton(sectionId = "chartSection", buttonId = "fullscreenChart") {
+      const button = document.getElementById(buttonId);
+      button.textContent = isChartFullscreen(sectionId) ? "Exit full screen" : "Full screen";
+    }
+
+    function enterFullscreenFallback(sectionId, buttonId) {
+      chartSection(sectionId).classList.add("fullscreen-fallback");
       document.body.classList.add("chart-fullscreen-fallback");
-      updateFullscreenButton();
-      if (chartRender) chartRender();
+      updateFullscreenButton(sectionId, buttonId);
+      chartRenderFor(sectionId)?.();
     }
 
-    function exitFullscreenFallback() {
-      chartSection().classList.remove("fullscreen-fallback");
+    function exitFullscreenFallback(sectionId, buttonId) {
+      chartSection(sectionId).classList.remove("fullscreen-fallback");
       document.body.classList.remove("chart-fullscreen-fallback");
-      updateFullscreenButton();
-      if (chartRender) chartRender();
+      updateFullscreenButton(sectionId, buttonId);
+      chartRenderFor(sectionId)?.();
     }
 
-    function chartRenderRatio() {
+    function chartRenderRatio(sectionId = "chartSection") {
       const deviceRatio = window.devicePixelRatio || 1;
-      const qualityMultiplier = isChartFullscreen() ? 1.75 : 1.5;
+      const qualityMultiplier = isChartFullscreen(sectionId) ? 1.75 : 1.5;
       return Math.min(3, Math.max(2, deviceRatio * qualityMultiplier));
     }
 
-    function chartZoomScale() {
-      return isChartFullscreen() ? 2 : 1;
+    function chartZoomScale(sectionId = "chartSection") {
+      return isChartFullscreen(sectionId) ? 2 : 1;
     }
 
-    function setupCanvas(canvasId = "chart") {
+    function setupCanvas(canvasId = "chart", sectionId = "chartSection") {
       const canvas = document.getElementById(canvasId);
-      const ratio = chartRenderRatio();
+      const ratio = chartRenderRatio(sectionId);
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.max(1, Math.floor(rect.width * ratio));
       canvas.height = Math.max(1, Math.floor(rect.height * ratio));
@@ -1826,10 +1838,11 @@
         const score = overlapCount * 100000 + lineCount * 20000 + displacement;
         if (score < bestScore) {
           bestScore = score;
-          best = { x: labelX, y: labelY, bounds: labelBounds, maxWidth };
+          best = { x: labelX, y: labelY, bounds: labelBounds, maxWidth, overlapCount, lineCount };
           if (overlapCount === 0 && lineCount === 0) break;
         }
       }
+      if (!best || (!options.allowOverlap && (best.overlapCount > 0 || best.lineCount > 0))) return null;
       return best;
     }
 
@@ -1950,20 +1963,30 @@
       chartSection.classList.toggle("is-2d", categories.length === 2);
       document.getElementById("chartTitle").textContent =
         categories.length === 2 ? "2D category comparison" : "3D category comparison";
-      updateFullscreenButton();
+      updateFullscreenButton("chartSection", "fullscreenChart");
       document.getElementById("resetView").hidden = ![2, 3].includes(categories.length);
       document.getElementById("viewCube").hidden = categories.length !== 3;
       document.getElementById("zoomIndicator").hidden = ![2, 3].includes(categories.length);
-      if (categories.length === 2) draw2D(categories);
-      else draw3D(categories);
+      const config = {
+        rows: plottableRows(categories),
+        canvasId: "chart",
+        tooltipId: "tooltip",
+        zoomIndicatorId: "zoomIndicator",
+        resetButtonId: "resetView",
+        viewCubeId: "viewCube",
+        sectionId: "chartSection",
+        setRender: render => { chartRender = render; },
+      };
+      if (categories.length === 2) draw2D(categories, config);
+      else draw3D(categories, config);
     }
 
-    function draw2D(categories) {
+    function draw2D(categories, config) {
       const ranges = categories.map(metricRange);
-      const trend = fit2DTrend(plottableRows(categories), categories, ranges);
+      const trend = fit2DTrend(config.rows, categories, ranges);
       let hover = null;
-      const tooltip = document.getElementById("tooltip");
-      const zoomIndicator = document.getElementById("zoomIndicator");
+      const tooltip = document.getElementById(config.tooltipId);
+      const zoomIndicator = document.getElementById(config.zoomIndicatorId);
       const hoverRadius = 18;
       const initial2DView = { minX: ranges[0].min, maxX: ranges[0].max, minY: ranges[1].min, maxY: ranges[1].max, zoom: 1 };
       let view2D = { ...initial2DView };
@@ -2150,7 +2173,7 @@
 
       function render() {
         update2DZoomIndicator();
-        const { canvas, ctx, width, height } = setupCanvas();
+        const { canvas, ctx, width, height } = setupCanvas(config.canvasId, config.sectionId);
         ctx.clearRect(0, 0, width, height);
         ctx.lineWidth = 1;
         ctx.font = "12px sans-serif";
@@ -2246,7 +2269,7 @@
           ctx.restore();
         }
 
-        const projected = plottableRows(categories).filter(pointIn2DView).map(row => ({ row, ...project(row, width, height) }));
+        const projected = config.rows.filter(pointIn2DView).map(row => ({ row, ...project(row, width, height) }));
         const modelLabelBounds = {
           left: plotLeft + 4,
           right: plotRight - 4,
@@ -2273,7 +2296,10 @@
           ctx.stroke();
           ctx.restore();
         }
-        for (const point of projected) {
+        const labelPoints = projected
+          .filter(point => point.row.pareto.optimal || point.row.pareto.suboptimal)
+          .sort((left, right) => Number(right.row.pareto.optimal) - Number(left.row.pareto.optimal));
+        for (const point of labelPoints) {
           if (point.row.pareto.optimal || point.row.pareto.suboptimal) {
             ctx.fillStyle = point.row.pareto.optimal ? cssColor("--chart-optimal-label") : cssColor("--chart-suboptimal-label");
             ctx.font = "700 12px sans-serif";
@@ -2298,8 +2324,8 @@
         canvas._points = projected;
       }
 
-      chartRender = render;
-      const canvas = document.getElementById("chart");
+      config.setRender(render);
+      const canvas = document.getElementById(config.canvasId);
       trackChartListener(canvas, "mousedown", event => {
         if (shouldIgnoreSyntheticMouse()) return;
         dragging = true;
@@ -2424,15 +2450,15 @@
         touchStart = null;
         touchMoved = false;
       });
-      trackChartListener(document.getElementById("resetView"), "click", reset2DView);
+      trackChartListener(document.getElementById(config.resetButtonId), "click", reset2DView);
       trackChartListener(window, "resize", render);
       render();
     }
 
-    function draw3D(categories) {
+    function draw3D(categories, config) {
       const ranges = categories.map(metricRange);
-      const trend = fit3DTrendLine(plottableRows(categories), categories, ranges);
-      const tooltip = document.getElementById("tooltip");
+      const trend = fit3DTrendLine(config.rows, categories, ranges);
+      const tooltip = document.getElementById(config.tooltipId);
       const initialCamera = { rotationX: 0.62, rotationY: 0.78, zoom: 1.25 };
       const viewPresets = {
         front: { rotationX: 0, rotationY: 0, zoom: 1.1 },
@@ -2450,9 +2476,14 @@
       let hover = null;
       let last = { x: 0, y: 0 };
       let pinchDistance = 0;
+      let touchStart = null;
+      let touchMoved = false;
+      let lastTouchInteractionAt = 0;
+      const tapMoveTolerance = 8;
+      const syntheticMouseIgnoreMs = 650;
       const hoverRadius = 18;
-      const viewCube = document.getElementById("viewCube");
-      const zoomIndicator = document.getElementById("zoomIndicator");
+      const viewCube = document.getElementById(config.viewCubeId);
+      const zoomIndicator = document.getElementById(config.zoomIndicatorId);
 
       function norm(row, category, range) {
         return ((row.graph[category.key] - range.min) / range.span) * 2 - 1;
@@ -2501,7 +2532,7 @@
       }
 
       function project(rotated, width, height) {
-        const scale = Math.min(width, height) * 0.28 * zoom * chartZoomScale();
+        const scale = Math.min(width, height) * 0.28 * zoom * chartZoomScale(config.sectionId);
         const perspective = 1 / (1 + (2.8 - rotated.z) * 0.12);
         return {
           x: width / 2 + rotated.x * scale * perspective,
@@ -2575,7 +2606,7 @@
       }
 
       function render() {
-        const { canvas, ctx, width, height } = setupCanvas();
+        const { canvas, ctx, width, height } = setupCanvas(config.canvasId, config.sectionId);
         updateViewCubeActiveState();
         updateZoomIndicator();
         ctx.clearRect(0, 0, width, height);
@@ -2656,7 +2687,7 @@
 
         drawTrendLine(ctx, width, height);
 
-        const projected = plottableRows(categories).map(row => {
+        const projected = config.rows.map(row => {
           const point = {
             x: norm(row, categories[0], ranges[0]),
             y: norm(row, categories[1], ranges[1]),
@@ -2684,8 +2715,10 @@
           ctx.restore();
         }
         const occupiedLabels = [];
-        for (const point of projected) {
-          if (!point.row.pareto.optimal && !point.row.pareto.suboptimal) continue;
+        const labelPoints = projected
+          .filter(point => point.row.pareto.optimal || point.row.pareto.suboptimal)
+          .sort((left, right) => Number(right.row.pareto.optimal) - Number(left.row.pareto.optimal));
+        for (const point of labelPoints) {
           ctx.fillStyle = point.row.pareto.optimal ? cssColor("--chart-optimal-label") : cssColor("--chart-suboptimal-label");
           ctx.font = "700 12px sans-serif";
           drawLaidOutLabel(
@@ -2701,7 +2734,7 @@
         canvas._points = projected;
       }
 
-      const canvas = document.getElementById("chart");
+      const canvas = document.getElementById(config.canvasId);
       function rotateFromPoint(point) {
         rotationY -= (point.x - last.x) * 0.01;
         rotationX += (point.y - last.y) * 0.01;
@@ -2723,7 +2756,37 @@
         );
       }
 
+      function markTouchInteraction() {
+        lastTouchInteractionAt = Date.now();
+      }
+
+      function shouldIgnoreSyntheticMouse() {
+        return Date.now() - lastTouchInteractionAt < syntheticMouseIgnoreMs;
+      }
+
+      function show3DTooltip(clientPoint) {
+        const rect = canvas.getBoundingClientRect();
+        const x = clientPoint.clientX - rect.left;
+        const y = clientPoint.clientY - rect.top;
+        const nearest = (canvas._points || []).reduce((best, point) => {
+          const distance = Math.hypot(point.x - x, point.y - y);
+          return distance < best.distance ? { point, distance } : best;
+        }, { point: null, distance: Infinity });
+        hover = nearest.distance < hoverRadius ? nearest.point : null;
+        canvas.style.cursor = hover ? "pointer" : "";
+        if (hover) {
+          tooltip.style.display = "block";
+          tooltip.style.left = `${clientPoint.clientX}px`;
+          tooltip.style.top = `${clientPoint.clientY}px`;
+          tooltip.innerHTML = tooltipText(hover.row, categories);
+        } else {
+          tooltip.style.display = "none";
+        }
+        render();
+      }
+
       trackChartListener(canvas, "mousedown", event => {
+        if (shouldIgnoreSyntheticMouse()) return;
         dragging = true;
         last = { x: event.clientX, y: event.clientY };
       });
@@ -2732,6 +2795,7 @@
         canvas.style.cursor = hover ? "pointer" : "";
       });
       trackChartListener(window, "mousemove", event => {
+        if (shouldIgnoreSyntheticMouse()) return;
         if (dragging) {
           rotateFromPoint({ x: event.clientX, y: event.clientY });
           canvas.style.cursor = "grabbing";
@@ -2750,23 +2814,7 @@
           render();
           return;
         }
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        const nearest = (canvas._points || []).reduce((best, point) => {
-          const distance = Math.hypot(point.x - x, point.y - y);
-          return distance < best.distance ? { point, distance } : best;
-        }, { point: null, distance: Infinity });
-        hover = nearest.distance < hoverRadius ? nearest.point : null;
-        canvas.style.cursor = hover ? "pointer" : "";
-        if (hover) {
-          tooltip.style.display = "block";
-          tooltip.style.left = `${event.clientX}px`;
-          tooltip.style.top = `${event.clientY}px`;
-          tooltip.innerHTML = tooltipText(hover.row, categories);
-        } else {
-          tooltip.style.display = "none";
-        }
-        render();
+        show3DTooltip(event);
       });
       trackChartListener(canvas, "mouseleave", () => {
         hover = null;
@@ -2781,18 +2829,31 @@
         render();
       }, { passive: false });
       trackChartListener(canvas, "touchstart", event => {
+        markTouchInteraction();
         if (event.touches.length === 1) {
+          event.preventDefault();
           dragging = true;
           last = touchPoint(event.touches[0]);
+          touchStart = last;
+          touchMoved = false;
         } else if (event.touches.length === 2) {
+          event.preventDefault();
           dragging = false;
+          touchStart = null;
+          touchMoved = true;
           pinchDistance = touchDistance(event.touches);
         }
       }, { passive: false });
       trackChartListener(canvas, "touchmove", event => {
+        markTouchInteraction();
         if (event.touches.length === 1 && dragging) {
           event.preventDefault();
-          rotateFromPoint(touchPoint(event.touches[0]));
+          const next = touchPoint(event.touches[0]);
+          if (touchStart && Math.hypot(next.x - touchStart.x, next.y - touchStart.y) > tapMoveTolerance) {
+            touchMoved = true;
+          }
+          if (!touchMoved) return;
+          rotateFromPoint(next);
         } else if (event.touches.length === 2) {
           event.preventDefault();
           const nextDistance = touchDistance(event.touches);
@@ -2805,20 +2866,35 @@
         }
       }, { passive: false });
       trackChartListener(canvas, "touchend", event => {
+        markTouchInteraction();
         if (!event.touches.length) {
+          const changedTouch = event.changedTouches?.[0];
+          const wasTap = changedTouch && touchStart && !touchMoved && pinchDistance === 0;
           dragging = false;
           pinchDistance = 0;
+          touchStart = null;
+          touchMoved = false;
+          if (wasTap) {
+            event.preventDefault();
+            show3DTooltip(changedTouch);
+          }
         } else if (event.touches.length === 1) {
+          event.preventDefault();
           dragging = true;
           last = touchPoint(event.touches[0]);
+          touchStart = null;
+          touchMoved = true;
           pinchDistance = 0;
         }
-      });
+      }, { passive: false });
       trackChartListener(canvas, "touchcancel", () => {
+        markTouchInteraction();
         dragging = false;
         pinchDistance = 0;
+        touchStart = null;
+        touchMoved = false;
       });
-      trackChartListener(document.getElementById("resetView"), "click", () => {
+      trackChartListener(document.getElementById(config.resetButtonId), "click", () => {
         setCamera(initialCamera);
       });
       trackChartListener(viewCube, "click", event => {
@@ -2828,7 +2904,7 @@
         if (preset) setCamera(preset, { preserveZoom: true });
       });
       trackChartListener(window, "resize", render);
-      chartRender = render;
+      config.setRender(render);
       render();
     }
 
@@ -2846,457 +2922,21 @@
       section.classList.toggle("is-2d", categories.length === 2);
       document.getElementById("paretoChartTitle").textContent =
         `Pareto-optimal models · ${optimalRows.length} model${optimalRows.length === 1 ? "" : "s"}`;
-      const ranges = categories.map(metricRange);
-      const canvas = document.getElementById("paretoChart");
-      const zoomIndicator = document.getElementById("paretoZoomIndicator");
-      const viewCube = document.getElementById("paretoViewCube");
-      viewCube.hidden = categories.length !== 3;
-
-      if (categories.length === 2) {
-        const initialView = {
-          minX: ranges[0].min,
-          maxX: ranges[0].max,
-          minY: ranges[1].min,
-          maxY: ranges[1].max,
-          zoom: 1,
-        };
-        let view = { ...initialView };
-        let dragging = false;
-        let last = { x: 0, y: 0 };
-        let pinchDistance = 0;
-
-        function clampView() {
-          const minSpanX = ranges[0].span / 8;
-          const minSpanY = ranges[1].span / 8;
-
-          function clampAxis(min, max, range, minSpan) {
-            let span = Math.max(0.000001, max - min);
-            if (span < minSpan) {
-              const center = (min + max) / 2;
-              span = minSpan;
-              min = center - span / 2;
-              max = center + span / 2;
-            } else if (span > range.span) {
-              min = range.min;
-              max = range.max;
-            }
-            if (min < range.min) {
-              max += range.min - min;
-              min = range.min;
-            }
-            if (max > range.max) {
-              min -= max - range.max;
-              max = range.max;
-            }
-            return { min: Math.max(range.min, min), max: Math.min(range.max, max) };
-          }
-
-          const x = clampAxis(view.minX, view.maxX, ranges[0], minSpanX);
-          const y = clampAxis(view.minY, view.maxY, ranges[1], minSpanY);
-          view.minX = x.min;
-          view.maxX = x.max;
-          view.minY = y.min;
-          view.maxY = y.max;
-          view.zoom = Math.max(1, Math.min(8, ranges[0].span / (view.maxX - view.minX)));
-        }
-
-        function zoomAt(point, factor, width, height) {
-          const margins = { top: 42, right: 42, bottom: 74, left: 92 };
-          const plotWidth = width - margins.left - margins.right;
-          const plotHeight = height - margins.top - margins.bottom;
-          const xRatio = clamped((point.x - margins.left) / plotWidth, 0, 1);
-          const yRatio = clamped((height - margins.bottom - point.y) / plotHeight, 0, 1);
-          const dataX = view.minX + xRatio * (view.maxX - view.minX);
-          const dataY = view.minY + yRatio * (view.maxY - view.minY);
-          const spanX = (view.maxX - view.minX) / factor;
-          const spanY = (view.maxY - view.minY) / factor;
-          view.minX = dataX - xRatio * spanX;
-          view.maxX = view.minX + spanX;
-          view.minY = dataY - yRatio * spanY;
-          view.maxY = view.minY + spanY;
-          clampView();
-        }
-
-        function panBy(deltaX, deltaY, width, height) {
-          const margins = { top: 42, right: 42, bottom: 74, left: 92 };
-          const spanX = view.maxX - view.minX;
-          const spanY = view.maxY - view.minY;
-          const domainX = -(deltaX / (width - margins.left - margins.right)) * spanX;
-          const domainY = (deltaY / (height - margins.top - margins.bottom)) * spanY;
-          view.minX += domainX;
-          view.maxX += domainX;
-          view.minY += domainY;
-          view.maxY += domainY;
-          clampView();
-        }
-
-        function render() {
-          zoomIndicator.textContent = `${view.zoom.toFixed(2)}x`;
-          const { ctx, width, height } = setupCanvas("paretoChart");
-          const margins = { top: 42, right: 42, bottom: 74, left: 92 };
-          const plotLeft = margins.left;
-          const plotRight = width - margins.right;
-          const plotTop = margins.top;
-          const plotBottom = height - margins.bottom;
-          const plotWidth = plotRight - plotLeft;
-          const plotHeight = plotBottom - plotTop;
-          ctx.clearRect(0, 0, width, height);
-          ctx.font = "12px sans-serif";
-          ctx.strokeStyle = cssColor("--chart-grid-major");
-          ctx.fillStyle = cssColor("--chart-text");
-          for (let index = 0; index <= 5; index += 1) {
-            const ratio = index / 5;
-            const x = plotLeft + ratio * plotWidth;
-            const y = plotBottom - ratio * plotHeight;
-            ctx.beginPath();
-            ctx.moveTo(x, plotTop);
-            ctx.lineTo(x, plotBottom);
-            ctx.moveTo(plotLeft, y);
-            ctx.lineTo(plotRight, y);
-            ctx.stroke();
-            ctx.fillText(formatTick(view.minX + ratio * (view.maxX - view.minX)), x - 14, plotBottom + 22);
-            ctx.textAlign = "right";
-            ctx.fillText(formatTick(view.minY + ratio * (view.maxY - view.minY)), plotLeft - 12, y + 4);
-            ctx.textAlign = "left";
-          }
-          ctx.strokeStyle = cssColor("--chart-axis");
-          ctx.lineWidth = 2.25;
-          ctx.beginPath();
-          ctx.moveTo(plotLeft, plotTop);
-          ctx.lineTo(plotLeft, plotBottom);
-          ctx.lineTo(plotRight, plotBottom);
-          ctx.stroke();
-          ctx.fillStyle = cssColor("--chart-title");
-          ctx.font = "700 16px sans-serif";
-          drawFixedContainedLabel(
-            ctx,
-            `${categories[0].label}${categories[0].lowerIsBetter ? " (lower better)" : " (higher better)"}`,
-            plotLeft,
-            height - 24,
-            { left: 6, right: width - 6, top: 6, bottom: height - 6 },
-          );
-          ctx.save();
-          ctx.translate(24, plotBottom);
-          ctx.rotate(-Math.PI / 2);
-          ctx.fillText(
-            `${categories[1].label}${categories[1].lowerIsBetter ? " (lower better)" : " (higher better)"}`,
-            0,
-            0,
-          );
-          ctx.restore();
-          const bounds = {
-            left: plotLeft + 4,
-            right: plotRight - 4,
-            top: plotTop + 4,
-            bottom: plotBottom - 4,
-          };
-          const occupied = [];
-          for (const row of optimalRows) {
-            const xValue = row.graph[categories[0].key];
-            const yValue = row.graph[categories[1].key];
-            if (
-              xValue < view.minX || xValue > view.maxX ||
-              yValue < view.minY || yValue > view.maxY
-            ) continue;
-            const x = plotLeft + ((xValue - view.minX) / (view.maxX - view.minX)) * plotWidth;
-            const y = plotBottom - ((yValue - view.minY) / (view.maxY - view.minY)) * plotHeight;
-            ctx.beginPath();
-            ctx.fillStyle = cssColor("--green");
-            ctx.arc(x, y, 5.5, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = cssColor("--chart-optimal-label");
-            ctx.font = "700 12px sans-serif";
-            drawLaidOutLabel(ctx, row.model, x, y, bounds, occupied, {
-              halo: true,
-              haloWidth: 2,
-              labelGap: 4,
-            });
-          }
-        }
-
-        function resetView() {
-          view = { ...initialView };
-          render();
-        }
-
-        trackChartListener(canvas, "mousedown", event => {
-          dragging = true;
-          last = { x: event.clientX, y: event.clientY };
-          canvas.style.cursor = "grabbing";
-        });
-        trackChartListener(window, "mouseup", () => {
-          dragging = false;
-          canvas.style.cursor = "";
-        });
-        trackChartListener(window, "mousemove", event => {
-          if (!dragging) return;
-          const rect = canvas.getBoundingClientRect();
-          panBy(event.clientX - last.x, event.clientY - last.y, rect.width, rect.height);
-          last = { x: event.clientX, y: event.clientY };
-          render();
-        });
-        trackChartListener(canvas, "wheel", event => {
-          event.preventDefault();
-          const rect = canvas.getBoundingClientRect();
-          zoomAt(
-            { x: event.clientX - rect.left, y: event.clientY - rect.top },
-            event.deltaY < 0 ? 1.08 : 0.92,
-            rect.width,
-            rect.height,
-          );
-          render();
-        }, { passive: false });
-        trackChartListener(canvas, "touchstart", event => {
-          if (event.touches.length === 1) {
-            dragging = true;
-            last = { x: event.touches[0].clientX, y: event.touches[0].clientY };
-          } else if (event.touches.length === 2) {
-            dragging = false;
-            pinchDistance = Math.hypot(
-              event.touches[0].clientX - event.touches[1].clientX,
-              event.touches[0].clientY - event.touches[1].clientY,
-            );
-          }
-        }, { passive: false });
-        trackChartListener(canvas, "touchmove", event => {
-          event.preventDefault();
-          const rect = canvas.getBoundingClientRect();
-          if (event.touches.length === 1 && dragging) {
-            const next = { x: event.touches[0].clientX, y: event.touches[0].clientY };
-            panBy(next.x - last.x, next.y - last.y, rect.width, rect.height);
-            last = next;
-            render();
-          } else if (event.touches.length === 2) {
-            const nextDistance = Math.hypot(
-              event.touches[0].clientX - event.touches[1].clientX,
-              event.touches[0].clientY - event.touches[1].clientY,
-            );
-            if (pinchDistance > 0) {
-              const midpoint = {
-                x: (event.touches[0].clientX + event.touches[1].clientX) / 2 - rect.left,
-                y: (event.touches[0].clientY + event.touches[1].clientY) / 2 - rect.top,
-              };
-              zoomAt(midpoint, nextDistance / pinchDistance, rect.width, rect.height);
-              render();
-            }
-            pinchDistance = nextDistance;
-          }
-        }, { passive: false });
-        trackChartListener(canvas, "touchend", event => {
-          if (!event.touches.length) {
-            dragging = false;
-            pinchDistance = 0;
-          } else if (event.touches.length === 1) {
-            dragging = true;
-            last = { x: event.touches[0].clientX, y: event.touches[0].clientY };
-            pinchDistance = 0;
-          }
-        });
-        trackChartListener(canvas, "touchcancel", () => {
-          dragging = false;
-          pinchDistance = 0;
-        });
-        trackChartListener(document.getElementById("resetParetoView"), "click", resetView);
-        trackChartListener(window, "resize", render);
-        paretoRender = render;
-      } else {
-        const initialCamera = { rotationX: 0.62, rotationY: 0.78, zoom: 1 };
-        const viewPresets = {
-          front: { rotationX: 0, rotationY: 0, zoom: 1 },
-          back: { rotationX: 0, rotationY: Math.PI, zoom: 1 },
-          right: { rotationX: 0, rotationY: Math.PI / 2, zoom: 1 },
-          left: { rotationX: 0, rotationY: -Math.PI / 2, zoom: 1 },
-          top: { rotationX: Math.PI / 2, rotationY: 0, zoom: 1 },
-          bottom: { rotationX: -Math.PI / 2, rotationY: 0, zoom: 1 },
-          isometric: initialCamera,
-        };
-        let rotationX = initialCamera.rotationX;
-        let rotationY = initialCamera.rotationY;
-        let zoom = initialCamera.zoom;
-        let dragging = false;
-        let last = { x: 0, y: 0 };
-        let pinchDistance = 0;
-
-        function setCamera(camera, { preserveZoom = false } = {}) {
-          rotationX = camera.rotationX;
-          rotationY = camera.rotationY;
-          if (!preserveZoom) zoom = camera.zoom;
-          render();
-        }
-
-        function cameraMatches(camera) {
-          const angleDifference = Math.atan2(
-            Math.sin(rotationY - camera.rotationY),
-            Math.cos(rotationY - camera.rotationY),
-          );
-          return (
-            Math.abs(rotationX - camera.rotationX) <= 0.015 &&
-            Math.abs(angleDifference) <= 0.015
-          );
-        }
-
-        function render() {
-          zoomIndicator.textContent = `${zoom.toFixed(2)}x`;
-          for (const button of viewCube.querySelectorAll("button[data-view]")) {
-            const preset = viewPresets[button.dataset.view];
-            button.classList.toggle("active", Boolean(preset && cameraMatches(preset)));
-          }
-          const { ctx, width, height } = setupCanvas("paretoChart");
-          const scale = Math.min(width, height) * 0.35 * zoom;
-          const rotate = point => {
-            const cosY = Math.cos(rotationY);
-            const sinY = Math.sin(rotationY);
-            const cosX = Math.cos(rotationX);
-            const sinX = Math.sin(rotationX);
-            const x = point.x * cosY - point.z * sinY;
-            const z = point.x * sinY + point.z * cosY;
-            return { x, y: point.y * cosX - z * sinX, z: point.y * sinX + z * cosX };
-          };
-          const project = point => {
-            const rotated = rotate(point);
-            return {
-              x: width / 2 + rotated.x * scale,
-              y: height / 2 - rotated.y * scale,
-              depth: rotated.z,
-            };
-          };
-          ctx.clearRect(0, 0, width, height);
-          ctx.strokeStyle = cssColor("--chart-axis-strong");
-          ctx.lineWidth = 2.4;
-          const origin = project({ x: -1, y: -1, z: -1 });
-          const axes = [
-            { point: { x: 1.2, y: -1, z: -1 }, category: categories[0] },
-            { point: { x: -1, y: 1.2, z: -1 }, category: categories[1] },
-            { point: { x: -1, y: -1, z: 1.2 }, category: categories[2] },
-          ];
-          ctx.fillStyle = cssColor("--chart-title");
-          ctx.font = "700 15px sans-serif";
-          for (const axis of axes) {
-            const end = project(axis.point);
-            ctx.beginPath();
-            ctx.moveTo(origin.x, origin.y);
-            ctx.lineTo(end.x, end.y);
-            ctx.stroke();
-            drawFixedContainedLabel(
-              ctx,
-              `${axis.category.label}${axis.category.lowerIsBetter ? " ↓" : " ↑"}`,
-              end.x + 6,
-              end.y + 4,
-              { left: 6, right: width - 6, top: 6, bottom: height - 6 },
-            );
-          }
-          const projected = optimalRows.map(row => {
-            const point = {
-              x: normalizedMetric(row, categories[0], ranges[0]) * 2 - 1,
-              y: normalizedMetric(row, categories[1], ranges[1]) * 2 - 1,
-              z: normalizedMetric(row, categories[2], ranges[2]) * 2 - 1,
-            };
-            return { row, ...project(point) };
-          }).sort((left, right) => left.depth - right.depth);
-          const occupied = [];
-          for (const point of projected) {
-            ctx.beginPath();
-            ctx.fillStyle = cssColor("--green");
-            ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = cssColor("--chart-optimal-label");
-            ctx.font = "700 12px sans-serif";
-            drawLaidOutLabel(
-              ctx,
-              point.row.model,
-              point.x,
-              point.y,
-              { left: 8, right: width - 8, top: 8, bottom: height - 8 },
-              occupied,
-              { halo: true, haloWidth: 2, labelGap: 4 },
-            );
-          }
-        }
-
-        function rotateFromPoint(point) {
-          rotationY -= (point.x - last.x) * 0.01;
-          rotationX += (point.y - last.y) * 0.01;
-          rotationX = clamped(rotationX, -Math.PI / 2, Math.PI / 2);
-          last = point;
-          render();
-        }
-
-        trackChartListener(canvas, "mousedown", event => {
-          dragging = true;
-          last = { x: event.clientX, y: event.clientY };
-          canvas.style.cursor = "grabbing";
-        });
-        trackChartListener(window, "mouseup", () => {
-          dragging = false;
-          canvas.style.cursor = "";
-        });
-        trackChartListener(window, "mousemove", event => {
-          if (dragging) rotateFromPoint({ x: event.clientX, y: event.clientY });
-        });
-        trackChartListener(canvas, "wheel", event => {
-          event.preventDefault();
-          zoom *= event.deltaY < 0 ? 1.08 : 0.92;
-          zoom = clamped(zoom, 0.55, 8);
-          render();
-        }, { passive: false });
-        trackChartListener(canvas, "touchstart", event => {
-          if (event.touches.length === 1) {
-            dragging = true;
-            last = { x: event.touches[0].clientX, y: event.touches[0].clientY };
-          } else if (event.touches.length === 2) {
-            dragging = false;
-            pinchDistance = Math.hypot(
-              event.touches[0].clientX - event.touches[1].clientX,
-              event.touches[0].clientY - event.touches[1].clientY,
-            );
-          }
-        }, { passive: false });
-        trackChartListener(canvas, "touchmove", event => {
-          event.preventDefault();
-          if (event.touches.length === 1 && dragging) {
-            rotateFromPoint({
-              x: event.touches[0].clientX,
-              y: event.touches[0].clientY,
-            });
-          } else if (event.touches.length === 2) {
-            const nextDistance = Math.hypot(
-              event.touches[0].clientX - event.touches[1].clientX,
-              event.touches[0].clientY - event.touches[1].clientY,
-            );
-            if (pinchDistance > 0) {
-              zoom = clamped(zoom * nextDistance / pinchDistance, 0.55, 8);
-              render();
-            }
-            pinchDistance = nextDistance;
-          }
-        }, { passive: false });
-        trackChartListener(canvas, "touchend", event => {
-          if (!event.touches.length) {
-            dragging = false;
-            pinchDistance = 0;
-          } else if (event.touches.length === 1) {
-            dragging = true;
-            last = { x: event.touches[0].clientX, y: event.touches[0].clientY };
-            pinchDistance = 0;
-          }
-        });
-        trackChartListener(canvas, "touchcancel", () => {
-          dragging = false;
-          pinchDistance = 0;
-        });
-        trackChartListener(document.getElementById("resetParetoView"), "click", () => {
-          setCamera(initialCamera);
-        });
-        trackChartListener(viewCube, "click", event => {
-          const button = event.target.closest?.("button[data-view]");
-          if (!button) return;
-          const preset = viewPresets[button.dataset.view];
-          if (preset) setCamera(preset, { preserveZoom: true });
-        });
-        trackChartListener(window, "resize", render);
-        paretoRender = render;
-      }
-      paretoRender();
+      updateFullscreenButton("paretoChartSection", "fullscreenParetoChart");
+      document.getElementById("paretoViewCube").hidden = categories.length !== 3;
+      document.getElementById("paretoZoomIndicator").hidden = ![2, 3].includes(categories.length);
+      const config = {
+        rows: optimalRows,
+        canvasId: "paretoChart",
+        tooltipId: "paretoTooltip",
+        zoomIndicatorId: "paretoZoomIndicator",
+        resetButtonId: "resetParetoView",
+        viewCubeId: "paretoViewCube",
+        sectionId: "paretoChartSection",
+        setRender: render => { paretoRender = render; },
+      };
+      if (categories.length === 2) draw2D(categories, config);
+      else draw3D(categories, config);
     }
 
     function safeFilename(value) {
@@ -3429,10 +3069,10 @@
       exportChart("paretoChart", document.getElementById("paretoChartTitle").textContent);
     });
     document.getElementById("saveTable").addEventListener("click", exportTable);
-    document.getElementById("fullscreenChart").addEventListener("click", async () => {
-      const section = chartSection();
+    async function toggleChartFullscreen(sectionId, buttonId) {
+      const section = chartSection(sectionId);
       if (section.classList.contains("fullscreen-fallback")) {
-        exitFullscreenFallback();
+        exitFullscreenFallback(sectionId, buttonId);
         return;
       }
       if (document.fullscreenElement === section) {
@@ -3440,22 +3080,36 @@
         return;
       }
       if (!section.requestFullscreen) {
-        enterFullscreenFallback();
+        enterFullscreenFallback(sectionId, buttonId);
         return;
       }
       try {
         await section.requestFullscreen();
       } catch {
-        enterFullscreenFallback();
+        enterFullscreenFallback(sectionId, buttonId);
       }
+    }
+    document.getElementById("fullscreenChart").addEventListener("click", () => {
+      toggleChartFullscreen("chartSection", "fullscreenChart");
+    });
+    document.getElementById("fullscreenParetoChart").addEventListener("click", () => {
+      toggleChartFullscreen("paretoChartSection", "fullscreenParetoChart");
     });
     document.addEventListener("fullscreenchange", () => {
-      updateFullscreenButton();
-      if (chartRender) chartRender();
+      updateFullscreenButton("chartSection", "fullscreenChart");
+      updateFullscreenButton("paretoChartSection", "fullscreenParetoChart");
+      chartRender?.();
+      paretoRender?.();
     });
     document.addEventListener("keydown", event => {
-      if (event.key === "Escape" && chartSection().classList.contains("fullscreen-fallback")) {
-        exitFullscreenFallback();
+      if (event.key !== "Escape") return;
+      for (const [sectionId, buttonId] of [
+        ["chartSection", "fullscreenChart"],
+        ["paretoChartSection", "fullscreenParetoChart"],
+      ]) {
+        if (chartSection(sectionId).classList.contains("fullscreen-fallback")) {
+          exitFullscreenFallback(sectionId, buttonId);
+        }
       }
     });
     applyTheme(activeTheme());
