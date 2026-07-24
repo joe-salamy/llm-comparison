@@ -34,7 +34,7 @@ DISPLAY_TO_CSV: dict[str, str] = {
     "CritPt": "critpt_pct",
     "APEX-Agents-AA": "apex_agents_aa_pct",
     "MMMU Pro": "mmmu_pro_pct",
-    "Blended (USD/1M Tokens)": "blended_usd_per_1m_tokens",
+    "Cost per Task": "cost_per_task",
     "Input Price (USD/1M Tokens)": "input_price_usd_per_1m_tokens",
     "Output Price (USD/1M Tokens)": "output_price_usd_per_1m_tokens",
     "Median (Tokens/s)": "median_tokens_per_second",

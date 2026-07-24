@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
         "--exclude-zero-price",
         action="store_true",
         help=(
-            "Exclude models whose blended price is 0 (promo/free tiers) "
+            "Exclude models whose cost per task is 0 (promo/free tiers) "
             "from scoring and output."
         ),
     )

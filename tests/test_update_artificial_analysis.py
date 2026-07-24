@@ -15,6 +15,7 @@ from llm_comparison.update_artificial_analysis import (
     CellSnapshot,
     HeaderSnapshot,
     extract_table,
+    validate_scraped_table,
 )
 
 
@@ -105,6 +106,25 @@ def test_image_alt_fallback_when_text_empty() -> None:
 
     assert display_headers == ["Provider"]
     assert rows == [["Provider X"]]
+
+
+def test_scraped_table_requires_cost_per_task() -> None:
+    with pytest.raises(RuntimeError, match="Cost per Task"):
+        validate_scraped_table(["Model"], [["Claude"]])
+
+
+def test_scraped_table_rejects_malformed_cost_per_task() -> None:
+    with pytest.raises(RuntimeError, match=r"malformed: \$1 / task"):
+        validate_scraped_table(
+            ["Model", "Cost per Task"], [["Claude", "$1 / task"]]
+        )
+
+
+def test_scraped_table_accepts_artificial_analysis_task_costs() -> None:
+    validate_scraped_table(
+        ["Model", "Cost per Task"],
+        [["Claude", "$2.03"], ["Unavailable", "--"]],
+    )
 
 
 def test_async_main_writes_data_and_timestamp_locally(

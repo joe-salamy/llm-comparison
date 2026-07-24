@@ -28,8 +28,7 @@ def test_parse_headers_derives_columns_from_input() -> None:
         "ITBench-AA",
         "Kubernetes Incident Root-Cause Analysis",
         "",
-        "Blended",
-        "USD/1M Tokens",
+        "Cost per Task",
         "",
         "Further Analysis",
         "Model",
@@ -43,7 +42,7 @@ def test_parse_headers_derives_columns_from_input() -> None:
         "Creator",
         "License",
         "ITBench-AA",
-        "Blended (USD/1M Tokens)",
+        "Cost per Task",
     ]
     assert csv_headers == [
         "model",
@@ -51,7 +50,7 @@ def test_parse_headers_derives_columns_from_input() -> None:
         "creator",
         "license",
         "itbench_aa",
-        "blended_usd_per_1m_tokens",
+        "cost_per_task",
     ]
 
 

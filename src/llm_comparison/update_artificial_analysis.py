@@ -51,6 +51,31 @@ def normalize_text(value: str) -> str:
     return " ".join(value.strip().split())
 
 
+def validate_scraped_table(
+    display_headers: list[str], rows: list[list[str]]
+) -> None:
+    required_headers = {"Model", "Cost per Task"}
+    missing_headers = sorted(required_headers - set(display_headers))
+    if missing_headers:
+        raise RuntimeError(
+            "Artificial Analysis table is missing required headers: "
+            + ", ".join(missing_headers)
+        )
+
+    cost_index = display_headers.index("Cost per Task")
+    invalid_costs = [
+        value
+        for row in rows
+        if (value := normalize_text(row[cost_index])) not in {"", "--"}
+        and re.fullmatch(r"\$[0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?", value) is None
+    ]
+    if invalid_costs:
+        examples = ", ".join(invalid_costs[:5])
+        raise RuntimeError(
+            f"Artificial Analysis Cost per Task values are malformed: {examples}"
+        )
+
+
 def display_header_from_snapshot(header: HeaderSnapshot) -> str:
     header_lines = [
         line.strip() for line in header["text"].splitlines() if line.strip()
@@ -217,7 +242,9 @@ async def scrape_table(
                     """
                 ),
             )
-            return extract_table(snapshot)
+            display_headers, rows = extract_table(snapshot)
+            validate_scraped_table(display_headers, rows)
+            return display_headers, rows
         finally:
             await browser.close()
 

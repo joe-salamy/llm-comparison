@@ -74,7 +74,7 @@ The report includes a sortable HTML table with the original selected columns plu
 
 Models are scored from their actual metric values using a relative geometric mean:
 
-- Each higher-is-better metric contributes `value / reference`; price, latency, and time metrics contribute `reference / value`.
+- Each higher-is-better metric contributes `value / reference`; cost, price, latency, and time metrics contribute `reference / value`.
 - Fixed references are 50 for percentage/index metrics, 100,000 for context windows, 100 for token-speed metrics, and 1 otherwise.
 - `Final Score` is 100 times the geometric mean of those ratios. A score of 100 matches the fixed references for the selected metrics.
 - Adding or removing other models does not change an existing model's score or rank.
@@ -86,7 +86,7 @@ List available categories and aliases:
 compare-models --list-categories
 ```
 
-Common aliases include `intelligence`, `price`, `speed`, `latency`, and `response-time`.
+The `price`, `cost`, and `cost-per-task` aliases select Artificial Analysis Cost per Task. Other common aliases include `intelligence`, `speed`, `latency`, and `response-time`.
 
 ## Convert Raw Results
 

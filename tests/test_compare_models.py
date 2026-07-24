@@ -8,9 +8,11 @@ from llm_comparison.compare_models_core import (
     FINAL_SCORE,
     Column,
     exclude_zero_price_rows,
+    is_lower_better,
     json_ready_rows,
     opencode_go_payload,
     pareto_flags,
+    resolve_category,
     score_rows,
     write_html,
 )
@@ -127,15 +129,15 @@ def test_initial_bootstrap_applies_default_zero_price_filter(tmp_path: Path) -> 
         {
             "model": "free",
             "quality": "50",
-            "blended_usd_per_1m_tokens": "0.00",
-            "_raw_values": {"quality": 50.0, "blended_usd_per_1m_tokens": 0.0},
+            "cost_per_task": "0.00",
+            "_raw_values": {"quality": 50.0, "cost_per_task": 0.0},
             FINAL_SCORE: 50.0,
         },
         {
             "model": "paid",
             "quality": "100",
-            "blended_usd_per_1m_tokens": "1.00",
-            "_raw_values": {"quality": 100.0, "blended_usd_per_1m_tokens": 1.0},
+            "cost_per_task": "1.00",
+            "_raw_values": {"quality": 100.0, "cost_per_task": 1.0},
             FINAL_SCORE: 100.0,
         },
     ]
@@ -145,12 +147,12 @@ def test_initial_bootstrap_applies_default_zero_price_filter(tmp_path: Path) -> 
         rows,
         [
             Column("model", "Model", False),
-            Column("blended_usd_per_1m_tokens", "Price", True),
+            Column("cost_per_task", "Cost per Task", True),
             Column(FINAL_SCORE, "Final Score", True),
         ],
         ["quality"],
         [],
-        ["quality", "blended_usd_per_1m_tokens"],
+        ["quality", "cost_per_task"],
     )
 
     html = output.read_text(encoding="utf-8")
@@ -579,11 +581,20 @@ def test_context_window_is_not_a_core_metric(tmp_path: Path) -> None:
     assert '"context_window_tokens"' not in core_keys
 
 
+def test_price_alias_resolves_to_lower_is_better_task_cost() -> None:
+    headers = ["model", "cost_per_task"]
+
+    resolved = resolve_category("price", headers)
+
+    assert resolved == "cost_per_task"
+    assert is_lower_better(resolved)
+
+
 def test_exclude_zero_price_rows_removes_zero_price_models() -> None:
     rows = [
-        {"model": "free", "blended_usd_per_1m_tokens": "0.00"},
-        {"model": "paid", "blended_usd_per_1m_tokens": "1.50"},
-        {"model": "empty", "blended_usd_per_1m_tokens": ""},
+        {"model": "free", "cost_per_task": "0.00"},
+        {"model": "paid", "cost_per_task": "1.50"},
+        {"model": "empty", "cost_per_task": ""},
     ]
 
     filtered = exclude_zero_price_rows(rows)
@@ -615,17 +626,17 @@ def test_relative_geometric_score_uses_actual_metric_ratios() -> None:
         {
             "model": "balanced",
             "artificial_analysis_intelligence_index": "50",
-            "blended_usd_per_1m_tokens": "1",
+            "cost_per_task": "1",
         },
         {
             "model": "expensive",
             "artificial_analysis_intelligence_index": "100",
-            "blended_usd_per_1m_tokens": "4",
+            "cost_per_task": "4",
         },
         {
             "model": "efficient",
             "artificial_analysis_intelligence_index": "25",
-            "blended_usd_per_1m_tokens": "0.25",
+            "cost_per_task": "0.25",
         },
     ]
 
@@ -633,7 +644,7 @@ def test_relative_geometric_score_uses_actual_metric_ratios() -> None:
         rows,
         [
             "artificial_analysis_intelligence_index",
-            "blended_usd_per_1m_tokens",
+            "cost_per_task",
         ],
     )
 
@@ -645,11 +656,11 @@ def test_relative_geometric_score_uses_actual_metric_ratios() -> None:
 
 def test_nonpositive_selected_metric_is_excluded() -> None:
     rows = [
-        {"model": "free", "blended_usd_per_1m_tokens": "0"},
-        {"model": "paid", "blended_usd_per_1m_tokens": "1"},
+        {"model": "free", "cost_per_task": "0"},
+        {"model": "paid", "cost_per_task": "1"},
     ]
 
-    scored = score_rows(rows, ["blended_usd_per_1m_tokens"])
+    scored = score_rows(rows, ["cost_per_task"])
 
     assert [row["model"] for row in scored] == ["paid"]
     assert scored[0][FINAL_SCORE] == 100.0
