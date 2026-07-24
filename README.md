@@ -68,7 +68,11 @@ different report path:
 compare-models price intelligence --output quality_vs_price.html
 ```
 
-The report includes a sortable HTML table with the original selected columns plus `Final Score`. With exactly two categories, it adds a 2D Pareto scatter plot. With exactly three categories, it adds a rotatable 3D Pareto scatter plot.
+The report includes a sortable HTML table with the original selected columns plus
+`Final Score`. With exactly two categories, it adds a 2D Pareto scatter plot.
+With exactly three categories, it adds a rotatable 3D Pareto scatter plot. A
+second chart shows only the Pareto-optimal models for the active metrics and
+filters. Each chart and the full filtered table can be saved as a PNG.
 
 ## Scoring
 
