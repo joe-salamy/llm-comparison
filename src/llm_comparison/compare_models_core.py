@@ -3,7 +3,6 @@ from __future__ import annotations
 import csv
 import json
 import math
-import statistics
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +13,7 @@ from .compare_models_template import HTML_TEMPLATE
 DEFAULT_INPUT = Path("data/results.csv")
 DEFAULT_OUTPUT = Path("public/index.html")
 ParetoFlag = dict[str, bool]
+SCORING_WEIGHTS = {"artificial_analysis_intelligence_index": 2.0}
 
 DISPLAY_LABELS = {
     "model": "Model",
@@ -189,12 +189,15 @@ def metric_reference_value(column: str) -> float:
 
 
 def relative_geometric_score(values: dict[str, float]) -> float:
-    log_ratios = []
+    weighted_log_ratio_sum = 0.0
+    weight_sum = 0.0
     for category, value in values.items():
         reference = metric_reference_value(category)
         ratio = reference / value if is_lower_better(category) else value / reference
-        log_ratios.append(math.log(ratio))
-    return 100 * math.exp(statistics.fmean(log_ratios))
+        weight = SCORING_WEIGHTS.get(category, 1.0)
+        weighted_log_ratio_sum += weight * math.log(ratio)
+        weight_sum += weight
+    return 100 * math.exp(weighted_log_ratio_sum / weight_sum)
 
 
 def score_rows(
@@ -495,6 +498,7 @@ def write_html(
             for category in available_categories
         ],
         "graphCategories": graph_categories,
+        "scoringWeights": SCORING_WEIGHTS,
         "openCodeGo": opencode_go_payload(opencode_go_rows or []),
     }
 

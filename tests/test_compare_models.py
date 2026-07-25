@@ -16,6 +16,7 @@ from llm_comparison.compare_models_core import (
     score_rows,
     write_html,
 )
+from llm_comparison.compare_models_template import HTML_TEMPLATE
 
 
 def test_opencode_go_header_validation_requires_every_displayed_field() -> None:
@@ -362,20 +363,18 @@ def test_pareto_chart_styles_prioritize_optimal_when_flags_overlap(
     )
 
     html = output.read_text(encoding="utf-8")
-    optimal_label_priority = (
-        'ctx.fillStyle = point.row.pareto.optimal ? cssColor("--chart-optimal-label") '
-        ': cssColor("--chart-suboptimal-label");'
-    )
-    optimal_opacity_priority = (
-        "ctx.globalAlpha = point.row.pareto.optimal ? 0.92 : "
-        "point.row.pareto.suboptimal ? 0.78 : 0.92;"
-    )
-
     assert '"pareto": {"optimal": true, "suboptimal": true}' in html
-    assert html.count(optimal_label_priority) == 2
-    assert optimal_opacity_priority in html
-    assert "Number(right.row.pareto.optimal) - Number(left.row.pareto.optimal)" in html
-    assert "best.overlapCount > 0 || best.lineCount > 0" in html
+    assert html.count("const labelLayout = layoutModelLabels") == 2
+    assert html.count("drawModelLabels(ctx, labelLayout);") == 2
+    assert (
+        'placement.point.row.pareto.optimal\n'
+        '          ? cssColor("--chart-optimal-label")\n'
+        '          : cssColor("--chart-suboptimal-label")'
+    ) in html
+    assert (
+        "alpha: row.pareto.optimal ? 0.92 : "
+        "row.pareto.suboptimal ? 0.78 : 0.92"
+    ) in html
 
 
 def test_report_exports_images_and_renders_separate_pareto_chart(
@@ -717,12 +716,12 @@ def test_relative_geometric_score_uses_actual_metric_ratios() -> None:
         {
             "model": "expensive",
             "artificial_analysis_intelligence_index": "100",
-            "cost_per_task": "4",
+            "cost_per_task": "8",
         },
         {
             "model": "efficient",
             "artificial_analysis_intelligence_index": "25",
-            "cost_per_task": "0.25",
+            "cost_per_task": "0.125",
         },
     ]
 
@@ -735,9 +734,66 @@ def test_relative_geometric_score_uses_actual_metric_ratios() -> None:
     )
 
     assert [row["model"] for row in scored] == ["efficient", "balanced", "expensive"]
-    assert scored[0][FINAL_SCORE] == pytest.approx(141.4214)
+    assert scored[0][FINAL_SCORE] == pytest.approx(125.9921)
     assert scored[1][FINAL_SCORE] == 100.0
-    assert scored[2][FINAL_SCORE] == pytest.approx(70.7107)
+    assert scored[2][FINAL_SCORE] == pytest.approx(79.3701)
+
+
+def test_intelligence_weight_breaks_unweighted_tie() -> None:
+    rows = [
+        {
+            "model": "Reference",
+            "artificial_analysis_intelligence_index": "50",
+            "cost_per_task": "1",
+        },
+        {
+            "model": "Higher intelligence",
+            "artificial_analysis_intelligence_index": "100",
+            "cost_per_task": "2",
+        },
+    ]
+
+    scored = score_rows(
+        rows,
+        ["artificial_analysis_intelligence_index", "cost_per_task"],
+    )
+
+    assert [row["model"] for row in scored] == [
+        "Higher intelligence",
+        "Reference",
+    ]
+    assert scored[0][FINAL_SCORE] == pytest.approx(125.9921)
+
+
+def test_unlisted_metrics_keep_equal_geometric_weights() -> None:
+    scored = score_rows(
+        [{"model": "equal weights", "quality": "4", "cost_per_task": "1"}],
+        ["quality", "cost_per_task"],
+    )
+
+    assert scored[0][FINAL_SCORE] == 200.0
+
+
+def test_write_html_serializes_scoring_weights(tmp_path: Path) -> None:
+    output = tmp_path / "report.html"
+    write_html(
+        output,
+        [
+            {
+                "model": "Reference",
+                "quality": "1",
+                "_raw_values": {"quality": 1.0},
+                FINAL_SCORE: 100.0,
+            }
+        ],
+        [Column("model", "Model", False), Column(FINAL_SCORE, "Final Score", True)],
+        ["quality"],
+        [],
+    )
+
+    assert embedded_payload(output.read_text(encoding="utf-8"))["scoringWeights"] == {
+        "artificial_analysis_intelligence_index": 2.0
+    }
 
 
 def test_nonpositive_selected_metric_is_excluded() -> None:
@@ -756,6 +812,17 @@ def embedded_payload(html: str) -> dict[str, object]:
     start = html.index("const payload = ") + len("const payload = ")
     end = html.index(";\n    const dataUpdated", start)
     return json.loads(html[start:end])
+
+
+def test_generated_public_html_matches_canonical_template() -> None:
+    public_html = (Path(__file__).parents[1] / "public" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    payload_start = public_html.index("const payload = ") + len("const payload = ")
+    payload_end = public_html.index(";\n    const dataUpdated", payload_start)
+    raw_embedded_payload = public_html[payload_start:payload_end]
+
+    assert public_html == HTML_TEMPLATE.replace("__PAYLOAD__", raw_embedded_payload)
 
 
 def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None:

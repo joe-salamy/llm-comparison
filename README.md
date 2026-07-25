@@ -80,7 +80,7 @@ Models are scored from their actual metric values using a relative geometric mea
 
 - Each higher-is-better metric contributes `value / reference`; cost, price, latency, and time metrics contribute `reference / value`.
 - Fixed references are 50 for percentage/index metrics, 100,000 for context windows, 100 for token-speed metrics, and 1 otherwise.
-- `Final Score` is 100 times the geometric mean of those ratios. A score of 100 matches the fixed references for the selected metrics.
+- `Final Score` is 100 times the weighted geometric mean of those ratios. Artificial Analysis Intelligence counts twice; every other selected metric counts once. A score of 100 matches the fixed references for the selected metrics.
 - Adding or removing other models does not change an existing model's score or rank.
 - Models missing a requested scoring category, or containing a nonpositive selected value, are excluded from that run.
 
