@@ -1,0 +1,14 @@
+{
+  "audit_head_before": "72c0c4c6d4e2ae81b97e8793a8560ffd2267c616",
+  "base": "master",
+  "completed_stage": "cleanup_complete",
+  "feature_branch": "feature/intelligence-weighted-rankings-and-persistent-pareto",
+  "feature_worktree": "/mnt/c/Users/joesa/code/llm-comparison-intelligence-weighted-rankings-and-persistent-pareto",
+  "integration_branch": "integration/intelligence-weighted-rankings-and-persistent-pareto-20260725-140827",
+  "integration_worktree": "/mnt/c/Users/joesa/code/llm-comparison-integrate-intelligence-weighted-rankings-and-persistent-pareto-20260725-140827",
+  "merge_mode": "squash",
+  "plan_path": "/mnt/c/Users/joesa/code/llm-comparison-intelligence-weighted-rankings-and-persistent-pareto/.omp/worktree-flow/20260725-133922-intelligence-weighted-rankings-and-persistent-pareto/plan.md",
+  "plan_title": "Intelligence-Weighted Rankings and Persistent Pareto Labels",
+  "run_id": "20260725-133922-intelligence-weighted-rankings-and-persistent-pareto",
+  "slug": "intelligence-weighted-rankings-and-persistent-pareto"
+}
