@@ -76,21 +76,9 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
     "Hy3": ("Hy3",),
 }
 
-TIER_THRESHOLDS = {
-    "GPT 5.6 Luna": 272_000,
-    "Qwen3.7 Plus": 256_000,
-    "Qwen3.6 Plus": 256_000,
-}
-
-
-TIERED_LABELS = {
-    "GPT 5.6 Luna (≤ 272K tokens)": ("GPT 5.6 Luna", False),
-    "GPT 5.6 Luna (> 272K tokens)": ("GPT 5.6 Luna", True),
-    "Qwen3.7 Plus (≤ 256K tokens)": ("Qwen3.7 Plus", False),
-    "Qwen3.7 Plus (> 256K tokens)": ("Qwen3.7 Plus", True),
-    "Qwen3.6 Plus (≤ 256K tokens)": ("Qwen3.6 Plus", False),
-    "Qwen3.6 Plus (> 256K tokens)": ("Qwen3.6 Plus", True),
-}
+TIER_LABEL_PATTERN = re.compile(
+    r"(?P<model>.+) \((?P<operator>≤|>) (?P<threshold>[1-9]\d*)K tokens\)"
+)
 
 
 class PriceRow(TypedDict):
@@ -102,6 +90,7 @@ class PriceRow(TypedDict):
     cache_write_price: Decimal | None
     monthly_usage: Decimal
     long_context: bool
+    tier_threshold_tokens: int | None
 
 
 class TableSnapshot(TypedDict):
@@ -199,14 +188,19 @@ def parse_source_rows(headers: list[str], rows: list[list[str]]) -> list[PriceRo
             if not values[index]:
                 raise RuntimeError(f"OpenCode Go {source_label!r} is missing {field}")
 
-        tier = TIERED_LABELS.get(source_label)
-        if tier is None and re.search(
-            r"\([^)]*\btokens\)$", source_label, re.IGNORECASE
-        ):
+        tier_match = TIER_LABEL_PATTERN.fullmatch(source_label)
+        if tier_match is not None:
+            model = tier_match.group("model")
+            long_context = tier_match.group("operator") == ">"
+            tier_threshold_tokens = int(tier_match.group("threshold")) * 1_000
+        elif re.search(r"\([^)]*\btokens\)$", source_label, re.IGNORECASE):
             raise RuntimeError(
                 f"Unrecognized OpenCode Go tiered source label: {source_label}"
             )
-        model, long_context = tier if tier is not None else (source_label, False)
+        else:
+            model = source_label
+            long_context = False
+            tier_threshold_tokens = None
         input_price = parse_currency(
             values[1], field="Input", source_label=source_label
         )
@@ -236,6 +230,7 @@ def parse_source_rows(headers: list[str], rows: list[list[str]]) -> list[PriceRo
                 "cache_write_price": cache_write_price,
                 "monthly_usage": monthly_usage,
                 "long_context": long_context,
+                "tier_threshold_tokens": tier_threshold_tokens,
             }
         )
     return parsed_rows
@@ -263,7 +258,9 @@ def collapse_price_rows(rows: list[PriceRow]) -> list[dict[str, str]]:
     output: list[dict[str, str]] = []
     for model in order:
         model_rows = grouped[model]
-        is_tiered = model in TIER_THRESHOLDS
+        is_tiered = any(
+            row["tier_threshold_tokens"] is not None for row in model_rows
+        )
         if is_tiered:
             primary = [row for row in model_rows if not row["long_context"]]
             secondary = [row for row in model_rows if row["long_context"]]
@@ -273,6 +270,16 @@ def collapse_price_rows(rows: list[PriceRow]) -> list[dict[str, str]]:
                     f"OpenCode Go {model} requires both pricing tiers; found: {labels}"
                 )
             primary_row, secondary_row = primary[0], secondary[0]
+            primary_threshold = primary_row["tier_threshold_tokens"]
+            secondary_threshold = secondary_row["tier_threshold_tokens"]
+            if (
+                primary_threshold is None
+                or secondary_threshold is None
+                or primary_threshold != secondary_threshold
+            ):
+                raise RuntimeError(
+                    f"OpenCode Go {model} pricing tiers have different thresholds"
+                )
             if primary_row["monthly_usage"] != secondary_row["monthly_usage"]:
                 raise RuntimeError(
                     f"OpenCode Go {model} pricing tiers have different Usage"
@@ -283,6 +290,7 @@ def collapse_price_rows(rows: list[PriceRow]) -> list[dict[str, str]]:
                 raise RuntimeError(f"Duplicate OpenCode Go model {model}: {labels}")
             primary_row = model_rows[0]
             secondary_row = None
+            primary_threshold = None
 
         result = {column: "" for column in CSV_COLUMNS}
         result.update(
@@ -306,7 +314,7 @@ def collapse_price_rows(rows: list[PriceRow]) -> list[dict[str, str]]:
         if secondary_row is not None:
             result.update(
                 {
-                    "long_context_threshold_tokens": str(TIER_THRESHOLDS[model]),
+                    "long_context_threshold_tokens": str(primary_threshold),
                     "long_context_input_price_usd_per_1m_tokens": decimal_text(
                         secondary_row["input_price"]
                     ),

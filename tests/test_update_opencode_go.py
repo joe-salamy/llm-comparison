@@ -254,7 +254,7 @@ def test_missing_required_source_cells_fail(missing_index: int) -> None:
         updater.parse_source_rows(HEADERS, rows)
 
 
-def test_duplicate_source_label_and_missing_qwen_tier_fail() -> None:
+def test_duplicate_source_label_and_missing_tier_fail() -> None:
     duplicates = [row.copy() for row in SOURCE_ROWS]
     duplicates.append(SOURCE_ROWS[0].copy())
     with pytest.raises(RuntimeError, match="Duplicate OpenCode Go source label"):
@@ -265,11 +265,35 @@ def test_duplicate_source_label_and_missing_qwen_tier_fail() -> None:
         updater.collapse_price_rows(updater.parse_source_rows(HEADERS, missing_tier))
 
 
-def test_unknown_tiered_source_label_fails() -> None:
+def test_new_tiered_model_is_collapsed_without_an_allowlist() -> None:
     rows = [row.copy() for row in SOURCE_ROWS]
-    rows.insert(0, ["Future Model (≤ 128K tokens)", "$1", "$2", "$0.5", "-", "$60"])
+    rows[0:0] = [
+        ["Future Model (≤ 128K tokens)", "$1", "$2", "$0.5", "-", "$60"],
+        ["Future Model (> 128K tokens)", "$2", "$4", "$1", "-", "$60"],
+    ]
+    future = by_model(
+        updater.collapse_price_rows(updater.parse_source_rows(HEADERS, rows)),
+        "Future Model",
+    )
+    assert future["long_context_threshold_tokens"] == "128000"
+    assert future["input_price_usd_per_1m_tokens"] == "1"
+    assert future["long_context_input_price_usd_per_1m_tokens"] == "2"
+
+
+def test_malformed_or_unpaired_tiered_source_labels_fail() -> None:
+    malformed = [row.copy() for row in SOURCE_ROWS]
+    malformed.insert(
+        0, ["Future Model (up to 128K tokens)", "$1", "$2", "$0.5", "-", "$60"]
+    )
     with pytest.raises(RuntimeError, match="Unrecognized OpenCode Go tiered"):
-        updater.parse_source_rows(HEADERS, rows)
+        updater.parse_source_rows(HEADERS, malformed)
+
+    unpaired = [row.copy() for row in SOURCE_ROWS]
+    unpaired.insert(
+        0, ["Future Model (≤ 128K tokens)", "$1", "$2", "$0.5", "-", "$60"]
+    )
+    with pytest.raises(RuntimeError, match="requires both pricing tiers"):
+        updater.collapse_price_rows(updater.parse_source_rows(HEADERS, unpaired))
 
 
 def test_required_aa_headers_are_validated(tmp_path: Path) -> None:
