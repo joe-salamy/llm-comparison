@@ -66,6 +66,10 @@ AA_ROWS = [
         "model": "DeepSeek V4 Flash (max)",
         "artificial_analysis_intelligence_index": "40",
     },
+    {
+        "model": "DeepSeek V4 Flash 0731 (max)",
+        "artificial_analysis_intelligence_index": "50",
+    },
 ]
 
 
@@ -92,10 +96,10 @@ def test_exact_table_collapses_tiered_rows_and_calculates_examples() -> None:
     assert by_model(rows, "Kimi K3")["opencode_go_blended_usd_per_1m_tokens"] == "2.31"
 
     flash = by_model(rows, "DeepSeek V4 Flash")
-    assert flash["artificial_analysis_model"] == "DeepSeek V4 Flash (max)"
-    assert flash["artificial_analysis_intelligence_index"] == "40"
+    assert flash["artificial_analysis_model"] == "DeepSeek V4 Flash 0731 (max)"
+    assert flash["artificial_analysis_intelligence_index"] == "50"
     assert flash["opencode_go_blended_usd_per_1m_tokens"] == "0.05796"
-    assert float(flash["value_score"]) == pytest.approx(52.3687162320)
+    assert float(flash["value_score"]) == pytest.approx(62.3687162320)
 
     luna = by_model(rows, "GPT 5.6 Luna")
     assert luna["long_context_threshold_tokens"] == "272000"

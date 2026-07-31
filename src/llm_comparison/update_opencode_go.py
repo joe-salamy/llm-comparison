@@ -69,6 +69,7 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
         "DeepSeek V4 Pro",
     ),
     "DeepSeek V4 Flash": (
+        "DeepSeek V4 Flash 0731 (max)",
         "DeepSeek V4 Flash (max)",
         "DeepSeek V4 Flash (high)",
         "DeepSeek V4 Flash",

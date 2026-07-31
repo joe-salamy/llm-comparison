@@ -322,6 +322,46 @@ def _embedded_payload(path: Path) -> dict[str, Any]:
     end = html.index(";\n    const dataUpdated", start)
     return cast(dict[str, Any], json.loads(html[start:end]))
 
+def _closest_current_pareto_labels(payload: dict[str, Any]) -> tuple[str, str]:
+    pareto_rows = [
+        row
+        for row in cast(list[dict[str, Any]], payload["rows"])
+        if cast(dict[str, bool], row["pareto"])["optimal"]
+    ]
+    if len(pareto_rows) < 2:
+        raise AssertionError("Expected at least two current Pareto models")
+
+    categories = cast(list[str], payload["graphCategories"])
+    scales = {
+        category: max(
+            float(cast(dict[str, Any], row["graph"])[category])
+            for row in pareto_rows
+        )
+        - min(
+            float(cast(dict[str, Any], row["graph"])[category])
+            for row in pareto_rows
+        )
+        or 1.0
+        for category in categories
+    }
+    pairs: list[tuple[float, str, str]] = []
+    for index, left in enumerate(pareto_rows):
+        left_graph = cast(dict[str, Any], left["graph"])
+        for right in pareto_rows[index + 1 :]:
+            right_graph = cast(dict[str, Any], right["graph"])
+            first_name, second_name = sorted(
+                (cast(str, left["model"]), cast(str, right["model"]))
+            )
+            distance = sum(
+                ((float(left_graph[category]) - float(right_graph[category]))
+                / scales[category])
+                ** 2
+                for category in categories
+            )
+            pairs.append((distance, first_name, second_name))
+    _, first_name, second_name = min(pairs)
+    return first_name, second_name
+
 
 def test_generated_public_report_shows_every_current_pareto_label(
     chromium_browser: Browser,
@@ -333,6 +373,8 @@ def test_generated_public_report_shows_every_current_pareto_label(
         for row in cast(list[dict[str, Any]], payload["rows"])
         if cast(dict[str, bool], row["pareto"])["optimal"]
     }
+    first_name, second_name = _closest_current_pareto_labels(payload)
+    target_names = {first_name, second_name}
     page = chromium_browser.new_page(viewport={"width": 1440, "height": 900})
     errors = _instrument_model_labels(page, expected)
 
@@ -347,12 +389,10 @@ def test_generated_public_report_shows_every_current_pareto_label(
                 cast(str, entry["text"]): (entry["x"], entry["y"])
                 for entry in entries
                 if entry["canvasId"] == canvas_id
-                and entry["text"]
-                in {"Grok 4.5 (high)", "GPT-5.6 Sol (medium)"}
+                and entry["text"] in target_names
             }
-            assert coordinates["Grok 4.5 (high)"] != coordinates[
-                "GPT-5.6 Sol (medium)"
-            ]
+            assert set(coordinates) == target_names
+            assert coordinates[first_name] != coordinates[second_name]
 
     _assert_no_browser_errors(errors)
     page.close()
