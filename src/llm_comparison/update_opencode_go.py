@@ -44,6 +44,14 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
     "Grok 4.5": ("Grok 4.5 (high)",),
     "GLM-5.2": ("GLM-5.2 (max)", "GLM-5.2"),
     "GLM-5.1": ("GLM-5.1",),
+    "GPT 5.6 Luna": (
+        "GPT-5.6 Luna (max)",
+        "GPT-5.6 Luna (xhigh)",
+        "GPT-5.6 Luna (high)",
+        "GPT-5.6 Luna (medium)",
+        "GPT-5.6 Luna (low)",
+        "GPT-5.6 Luna (Non-reasoning)",
+    ),
     "Kimi K3": ("Kimi K3",),
     "Kimi K2.7 Code": ("Kimi K2.7 Code",),
     "Kimi K2.6": ("Kimi K2.6",),
@@ -65,9 +73,19 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
         "DeepSeek V4 Flash (high)",
         "DeepSeek V4 Flash",
     ),
+    "Hy3": ("Hy3",),
 }
 
+TIER_THRESHOLDS = {
+    "GPT 5.6 Luna": 272_000,
+    "Qwen3.7 Plus": 256_000,
+    "Qwen3.6 Plus": 256_000,
+}
+
+
 TIERED_LABELS = {
+    "GPT 5.6 Luna (≤ 272K tokens)": ("GPT 5.6 Luna", False),
+    "GPT 5.6 Luna (> 272K tokens)": ("GPT 5.6 Luna", True),
     "Qwen3.7 Plus (≤ 256K tokens)": ("Qwen3.7 Plus", False),
     "Qwen3.7 Plus (> 256K tokens)": ("Qwen3.7 Plus", True),
     "Qwen3.6 Plus (≤ 256K tokens)": ("Qwen3.6 Plus", False),
@@ -245,7 +263,7 @@ def collapse_price_rows(rows: list[PriceRow]) -> list[dict[str, str]]:
     output: list[dict[str, str]] = []
     for model in order:
         model_rows = grouped[model]
-        is_tiered = model in {"Qwen3.7 Plus", "Qwen3.6 Plus"}
+        is_tiered = model in TIER_THRESHOLDS
         if is_tiered:
             primary = [row for row in model_rows if not row["long_context"]]
             secondary = [row for row in model_rows if row["long_context"]]
@@ -288,7 +306,7 @@ def collapse_price_rows(rows: list[PriceRow]) -> list[dict[str, str]]:
         if secondary_row is not None:
             result.update(
                 {
-                    "long_context_threshold_tokens": "256000",
+                    "long_context_threshold_tokens": str(TIER_THRESHOLDS[model]),
                     "long_context_input_price_usd_per_1m_tokens": decimal_text(
                         secondary_row["input_price"]
                     ),

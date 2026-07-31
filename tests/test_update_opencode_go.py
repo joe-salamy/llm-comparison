@@ -20,6 +20,8 @@ SOURCE_ROWS = [
     ["Grok 4.5", "$2.00", "$6.00", "$0.50", "-", "$15"],
     ["GLM-5.2", "$1.40", "$4.40", "$0.26", "-", "$60"],
     ["GLM-5.1", "$1.40", "$4.40", "$0.26", "-", "$60"],
+    ["GPT 5.6 Luna (≤ 272K tokens)", "$0.20", "$1.20", "$0.02", "$0.25", "$15"],
+    ["GPT 5.6 Luna (> 272K tokens)", "$0.40", "$1.80", "$0.04", "$0.50", "$15"],
     ["Kimi K3", "$3.00", "$15.00", "$0.30", "-", "$15"],
     ["Kimi K2.7 Code", "$0.95", "$4.00", "$0.19", "-", "$60"],
     ["Kimi K2.6", "$0.95", "$4.00", "$0.16", "-", "$60"],
@@ -41,6 +43,8 @@ AA_ROWS = [
     {"model": "GLM-5.2", "artificial_analysis_intelligence_index": "45"},
     {"model": "GLM-5.2 (max)", "artificial_analysis_intelligence_index": "50*"},
     {"model": "GLM-5.1", "artificial_analysis_intelligence_index": "41"},
+    {"model": "GPT-5.6 Luna (max)", "artificial_analysis_intelligence_index": "51"},
+    {"model": "GPT-5.6 Luna (xhigh)", "artificial_analysis_intelligence_index": "49"},
     {"model": "GLM-5.1", "artificial_analysis_intelligence_index": "44"},
     {"model": "Kimi K3", "artificial_analysis_intelligence_index": "55"},
     {"model": "Kimi K2.7 Code", "artificial_analysis_intelligence_index": "38"},
@@ -75,13 +79,14 @@ def by_model(rows: list[dict[str, str]], model: str) -> dict[str, str]:
     return next(row for row in rows if row["model"] == model)
 
 
-def test_exact_table_collapses_to_sixteen_rows_and_calculates_examples() -> None:
+def test_exact_table_collapses_tiered_rows_and_calculates_examples() -> None:
     rows = output_rows()
-    assert len(rows) == 16
-    assert [row["model"] for row in rows[:4]] == [
+    assert len(rows) == 17
+    assert [row["model"] for row in rows[:5]] == [
         "Grok 4.5",
         "GLM-5.2",
         "GLM-5.1",
+        "GPT 5.6 Luna",
         "Kimi K3",
     ]
     assert by_model(rows, "Kimi K3")["opencode_go_blended_usd_per_1m_tokens"] == "2.31"
@@ -91,6 +96,13 @@ def test_exact_table_collapses_to_sixteen_rows_and_calculates_examples() -> None
     assert flash["artificial_analysis_intelligence_index"] == "40"
     assert flash["opencode_go_blended_usd_per_1m_tokens"] == "0.05796"
     assert float(flash["value_score"]) == pytest.approx(52.3687162320)
+
+    luna = by_model(rows, "GPT 5.6 Luna")
+    assert luna["long_context_threshold_tokens"] == "272000"
+    assert luna["artificial_analysis_model"] == "GPT-5.6 Luna (max)"
+    assert luna["artificial_analysis_intelligence_index"] == "51"
+    assert luna["opencode_go_blended_usd_per_1m_tokens"] == "0.174"
+    assert luna["long_context_blended_usd_per_1m_tokens"] == "0.288"
 
     qwen = by_model(rows, "Qwen3.7 Plus")
     assert qwen["long_context_threshold_tokens"] == "256000"
@@ -358,7 +370,7 @@ def test_async_main_writes_only_after_validation(
     )
     asyncio.run(updater.async_main(args))
     assert calls == ["scrape", "clock", "write"]
-    assert len(updater.read_aa_rows(csv_path)) == 16
+    assert len(updater.read_aa_rows(csv_path)) == 17
 
 
 def test_failed_join_preserves_existing_output(
