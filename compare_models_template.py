@@ -727,7 +727,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       <div>
         <h1 id="pageTitle">LLM Comparison</h1>
         <div class="meta-stack">
-          <div class="meta" id="dataFreshness">Data updated: 2026-07-25T19:55:03Z</div>
+          <div class="meta" id="dataFreshness">Data updated: 2026-07-31T07:09:45Z</div>
           <div class="meta" id="summary"></div>
         </div>
       </div>
@@ -843,7 +843,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         <ul>
           <li>Higher is better for quality, benchmark, context, and speed metrics.</li>
           <li>Lower is better for cost, price, latency, and time metrics.</li>
-          <li>The final score is the relative geometric mean of actual metric ratios. A score of 100 matches fixed reference values; higher is better.</li>
+          <li>The final score is the weighted relative geometric mean of actual metric ratios: Artificial Analysis Intelligence counts twice and every other selected metric counts once. A score of 100 matches fixed reference values; higher is better.</li>
           <li>Models missing any selected numeric metric, or containing a nonpositive selected value, are excluded from that run.</li>
         </ul>
         <p>Credit: model benchmark, pricing, and performance data is from <a href="https://artificialanalysis.ai/leaderboards/models" rel="noreferrer">Artificial Analysis</a>. This project is an independent analysis and is not affiliated with Artificial Analysis.</p>
@@ -852,7 +852,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   </main>
   <script>
     const payload = __PAYLOAD__;
-    const dataUpdated = "2026-07-25T19:55:03Z";
+    const dataUpdated = "2026-07-31T07:09:45Z";
     const displayLabels = {
       model: "Model",
       context_window_tokens: "Context Window",
@@ -1167,13 +1167,16 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
 
     function relativeGeometricScore(graph, categories) {
-      const meanLogRatio = categories.reduce((sum, category) => {
+      const totals = categories.reduce((result, category) => {
         const value = graph[category];
         const reference = metricReferenceValue(category);
         const ratio = isLowerBetter(category) ? reference / value : value / reference;
-        return sum + Math.log(ratio);
-      }, 0) / categories.length;
-      return 100 * Math.exp(meanLogRatio);
+        const weight = payload.scoringWeights[category] ?? 1;
+        result.weightedLogRatios += weight * Math.log(ratio);
+        result.weights += weight;
+        return result;
+      }, { weightedLogRatios: 0, weights: 0 });
+      return 100 * Math.exp(totals.weightedLogRatios / totals.weights);
     }
 
     function dominates(challenger, target, categories, better) {
@@ -1848,25 +1851,290 @@ HTML_TEMPLATE = r"""<!doctype html>
       return best;
     }
 
-    function drawContainedLabel(ctx, text, x, y, bounds, options = {}) {
-      const label = placedContainedLabel(ctx, text, x, y, bounds, options);
-      if (!label) return null;
-      if (options.halo) {
-        ctx.save();
-        ctx.lineJoin = "round";
-        ctx.lineWidth = options.haloWidth ?? 2;
-        ctx.strokeStyle = options.haloColor ?? cssColor("--chart-label-halo");
-        ctx.strokeText(text, label.x, label.y, label.maxWidth);
-        ctx.restore();
+    function compareTuple(left, right) {
+      for (let index = 0; index < left.length; index += 1) {
+        if (left[index] !== right[index]) return left[index] - right[index];
       }
-      ctx.fillText(text, label.x, label.y, label.maxWidth);
-      return label.bounds;
+      return 0;
     }
 
-    function drawLaidOutLabel(ctx, text, x, y, bounds, occupied, options = {}) {
-      const labelBounds = drawContainedLabel(ctx, text, x, y, bounds, { ...options, occupied });
-      if (labelBounds) occupied.push(labelBounds);
-      return labelBounds;
+    function circleIntersectsRect(point, rect) {
+      const closestX = clamped(point.x, rect.left, rect.right);
+      const closestY = clamped(point.y, rect.top, rect.bottom);
+      return Math.hypot(point.x - closestX, point.y - closestY) <= point.radius;
+    }
+
+    function leaderFor(point, rect) {
+      const end = {
+        x: clamped(point.x, rect.left, rect.right),
+        y: clamped(point.y, rect.top, rect.bottom),
+      };
+      let dx = end.x - point.x;
+      let dy = end.y - point.y;
+      let length = Math.hypot(dx, dy);
+      if (length < 0.000001) {
+        const edges = [
+          { x: rect.left, y: point.y },
+          { x: rect.right, y: point.y },
+          { x: point.x, y: rect.top },
+          { x: point.x, y: rect.bottom },
+        ].sort((left, right) => (
+          Math.hypot(left.x - point.x, left.y - point.y) -
+          Math.hypot(right.x - point.x, right.y - point.y)
+        ));
+        end.x = edges[0].x;
+        end.y = edges[0].y;
+        dx = end.x - point.x;
+        dy = end.y - point.y;
+        length = Math.hypot(dx, dy);
+      }
+      const scale = length > 0 ? point.radius / length : 0;
+      return {
+        start: { x: point.x + dx * scale, y: point.y + dy * scale },
+        end,
+      };
+    }
+
+    function nearbyLabelCandidates(ctx, point, bounds, occupied, markers, avoidSegments, leaders) {
+      const text = point.row.model;
+      const maxWidth = Math.max(12, bounds.right - bounds.left - 6);
+      const labelWidth = Math.min(ctx.measureText(text).width, maxWidth);
+      const offsets = [
+        { dx: 8, dy: -8 },
+        { dx: 8, dy: 18 },
+        { dx: -labelWidth - 8, dy: -8 },
+        { dx: -labelWidth - 8, dy: 18 },
+        { dx: -labelWidth / 2, dy: -18 },
+        { dx: -labelWidth / 2, dy: 28 },
+        { dx: 14, dy: 4 },
+        { dx: -labelWidth - 14, dy: 4 },
+      ];
+      return offsets.map((offset, candidateIndex) => {
+        let x = point.x + offset.dx;
+        let y = point.y + offset.dy;
+        const rawBounds = labelBoundsFor(ctx, text, x, y, 3, maxWidth);
+        x += clamped(rawBounds.left, bounds.left, bounds.right) - rawBounds.left;
+        x += clamped(rawBounds.right, bounds.left, bounds.right) - rawBounds.right;
+        y += clamped(rawBounds.top, bounds.top, bounds.bottom) - rawBounds.top;
+        y += clamped(rawBounds.bottom, bounds.top, bounds.bottom) - rawBounds.bottom;
+        const labelBounds = labelBoundsFor(ctx, text, x, y, 3, maxWidth);
+        const reservedBounds = expandedRect(labelBounds, 4);
+        const labelOverlapCount = occupied.filter(rect => rectsIntersect(labelBounds, rect)).length;
+        const markerIntersectionCount = markers.filter(marker => (
+          marker !== point && circleIntersectsRect(marker, labelBounds)
+        )).length;
+        const avoidOrLeaderIntersectionCount = [
+          ...avoidSegments,
+          ...leaders,
+        ].filter(segment => segmentIntersectsRect(segment, reservedBounds)).length;
+        return {
+          point,
+          text,
+          x,
+          y,
+          bounds: labelBounds,
+          maxWidth,
+          leader: null,
+          tuple: [
+            labelOverlapCount,
+            markerIntersectionCount,
+            avoidOrLeaderIntersectionCount,
+            Math.hypot(offset.dx, offset.dy),
+            candidateIndex,
+          ],
+        };
+      });
+    }
+
+    function laneLabelCandidates(ctx, point, bounds, occupied, markers, avoidSegments, leaders, interval) {
+      const text = point.row.model;
+      const maxWidth = Math.max(12, bounds.right - bounds.left - 6);
+      const metrics = ctx.measureText(text);
+      const ascent = metrics.actualBoundingBoxAscent || 10;
+      const descent = metrics.actualBoundingBoxDescent || 3;
+      const minimumBaseline = bounds.top + 3 + ascent;
+      const maximumBaseline = bounds.bottom - 3 - descent;
+      const safeMinimum = Math.min(minimumBaseline, maximumBaseline);
+      const safeMaximum = Math.max(minimumBaseline, maximumBaseline);
+      const preferredBaseline = clamped(point.y, safeMinimum, safeMaximum);
+      const baselines = [];
+      if (minimumBaseline <= maximumBaseline) {
+        for (let baseline = minimumBaseline; baseline <= maximumBaseline; baseline += interval) {
+          baselines.push(baseline);
+        }
+      } else {
+        baselines.push((bounds.top + bounds.bottom + ascent - descent) / 2);
+      }
+      const candidates = [];
+      for (const [sideIndex, side] of [
+        { x: bounds.left + 3, textAlign: "left" },
+        { x: bounds.right - 3, textAlign: "right" },
+      ].entries()) {
+        for (const baseline of [...baselines, preferredBaseline]) {
+          ctx.textAlign = side.textAlign;
+          const labelBounds = labelBoundsFor(ctx, text, side.x, baseline, 3, maxWidth);
+          const leader = leaderFor(point, labelBounds);
+          const reservedBounds = expandedRect(labelBounds, 4);
+          const labelOverlapCount = occupied.filter(rect => rectsIntersect(labelBounds, rect)).length;
+          const markerIntersectionCount = markers.filter(marker => (
+            marker !== point && circleIntersectsRect(marker, labelBounds)
+          )).length;
+          const avoidOrLeaderIntersectionCount = [
+            ...avoidSegments,
+            ...leaders,
+          ].filter(segment => (
+            segmentIntersectsRect(segment, reservedBounds) ||
+            segmentIntersects(leader.start, leader.end, segment.start, segment.end)
+          )).length + occupied.filter(rect => segmentIntersectsRect(leader, rect)).length;
+          const labelCenterY = (labelBounds.top + labelBounds.bottom) / 2;
+          candidates.push({
+            point,
+            text,
+            x: side.x,
+            y: baseline,
+            bounds: labelBounds,
+            maxWidth,
+            textAlign: side.textAlign,
+            leader,
+            tuple: [
+              labelOverlapCount,
+              markerIntersectionCount,
+              avoidOrLeaderIntersectionCount,
+              Math.abs(labelCenterY - point.y),
+              Math.hypot(leader.end.x - leader.start.x, leader.end.y - leader.start.y),
+              sideIndex,
+              baseline,
+            ],
+          });
+        }
+      }
+      return candidates;
+    }
+
+    function layoutOptimalLabels(ctx, points, bounds, avoidSegments, fontSize, allowLaneOverlap) {
+      const font = `700 ${fontSize}px sans-serif`;
+      const interval = fontSize === 12 ? 16 : 14;
+      const occupied = [];
+      const leaders = [];
+      const placements = [];
+      ctx.font = font;
+      ctx.textAlign = "left";
+      const ordered = points.map(point => {
+        const candidates = nearbyLabelCandidates(ctx, point, bounds, [], points, avoidSegments, []);
+        const candidateCount = candidates.filter(candidate => (
+          candidate.tuple[1] === 0 && candidate.tuple[2] === 0
+        )).length;
+        return { point, candidateCount, textWidth: ctx.measureText(point.row.model).width };
+      }).sort((left, right) => (
+        left.candidateCount - right.candidateCount ||
+        right.textWidth - left.textWidth ||
+        left.point.row.model.localeCompare(right.point.row.model)
+      ));
+      const callouts = [];
+      for (const { point } of ordered) {
+        ctx.textAlign = "left";
+        const nearby = nearbyLabelCandidates(ctx, point, bounds, occupied, points, avoidSegments, leaders)
+          .filter(candidate => candidate.tuple[0] === 0)
+          .sort((left, right) => compareTuple(left.tuple, right.tuple))[0];
+        if (nearby) {
+          placements.push({ ...nearby, font, fontSize, textAlign: "left" });
+          occupied.push(expandedRect(nearby.bounds, 4));
+        } else {
+          callouts.push(point);
+        }
+      }
+      for (const point of callouts) {
+        const candidates = laneLabelCandidates(
+          ctx, point, bounds, occupied, points, avoidSegments, leaders, interval,
+        ).sort((left, right) => compareTuple(left.tuple, right.tuple));
+        const selected = candidates.find(candidate => candidate.tuple[0] === 0) ||
+          (allowLaneOverlap ? candidates[0] : null);
+        if (!selected) return null;
+        placements.push({ ...selected, font, fontSize });
+        occupied.push(expandedRect(selected.bounds, 4));
+        leaders.push(selected.leader);
+      }
+      return { placements, occupied, leaders };
+    }
+
+    function drawProjectedPoint(ctx, point) {
+      ctx.save();
+      ctx.globalAlpha = point.alpha;
+      ctx.fillStyle = point.fillStyle;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, point.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function layoutModelLabels(ctx, labelPoints, bounds, options = {}) {
+      const avoidSegments = options.avoidSegments ?? [];
+      const optimal = labelPoints.filter(point => point.row.pareto.optimal);
+      const suboptimal = labelPoints.filter(point => !point.row.pareto.optimal && point.row.pareto.suboptimal);
+      let optimalLayout = layoutOptimalLabels(ctx, optimal, bounds, avoidSegments, 12, false);
+      if (!optimalLayout) {
+        optimalLayout = layoutOptimalLabels(ctx, optimal, bounds, avoidSegments, 10, false) ||
+          layoutOptimalLabels(ctx, optimal, bounds, avoidSegments, 10, true);
+      }
+      const placements = [...optimalLayout.placements];
+      const hidden = [];
+      ctx.font = "700 12px sans-serif";
+      ctx.textAlign = "left";
+      for (const point of suboptimal) {
+        const selected = nearbyLabelCandidates(
+          ctx,
+          point,
+          bounds,
+          optimalLayout.occupied,
+          labelPoints,
+          avoidSegments,
+          optimalLayout.leaders,
+        ).filter(candidate => candidate.tuple[0] === 0)
+          .sort((left, right) => compareTuple(left.tuple, right.tuple))[0];
+        if (!selected) {
+          hidden.push(point);
+          continue;
+        }
+        placements.push({
+          ...selected,
+          font: "700 12px sans-serif",
+          fontSize: 12,
+          textAlign: "left",
+        });
+        optimalLayout.occupied.push(expandedRect(selected.bounds, 4));
+      }
+      return { placements, hidden };
+    }
+
+    function drawModelLabels(ctx, layout) {
+      ctx.save();
+      ctx.strokeStyle = cssColor("--chart-optimal-label");
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.55;
+      ctx.setLineDash([]);
+      for (const placement of layout.placements) {
+        if (!placement.leader) continue;
+        ctx.beginPath();
+        ctx.moveTo(placement.leader.start.x, placement.leader.start.y);
+        ctx.lineTo(placement.leader.end.x, placement.leader.end.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+      for (const placement of layout.placements) drawProjectedPoint(ctx, placement.point);
+      for (const placement of layout.placements) {
+        ctx.save();
+        ctx.font = placement.font;
+        ctx.textAlign = placement.textAlign;
+        ctx.fillStyle = placement.point.row.pareto.optimal
+          ? cssColor("--chart-optimal-label")
+          : cssColor("--chart-suboptimal-label");
+        ctx.lineJoin = "round";
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = cssColor("--chart-label-halo");
+        ctx.strokeText(placement.text, placement.x, placement.y, placement.maxWidth);
+        ctx.fillText(placement.text, placement.x, placement.y, placement.maxWidth);
+        ctx.restore();
+      }
     }
 
     function drawFixedContainedLabel(ctx, text, x, y, bounds, options = {}) {
@@ -2271,24 +2539,24 @@ HTML_TEMPLATE = r"""<!doctype html>
           ctx.restore();
         }
 
-        const projected = config.rows.filter(pointIn2DView).map(row => ({ row, ...project(row, width, height) }));
+        const projected = config.rows.filter(pointIn2DView).map(row => ({
+          row,
+          ...project(row, width, height),
+          radius: row.pareto.optimal ? 5.5 : 4,
+          fillStyle: pointColor(row),
+          alpha: 1,
+        }));
         const modelLabelBounds = {
           left: plotLeft + 4,
           right: plotRight - 4,
           top: plotTop + 4,
           bottom: plotBottom - 4,
         };
-        const occupiedLabels = [];
         ctx.save();
         ctx.beginPath();
         ctx.rect(plotLeft, plotTop, plotWidth, plotHeight);
         ctx.clip();
-        for (const point of projected) {
-          ctx.beginPath();
-          ctx.fillStyle = pointColor(point.row);
-          ctx.arc(point.x, point.y, point.row.pareto.optimal ? 5.5 : 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        for (const point of projected) drawProjectedPoint(ctx, point);
         if (hover) {
           ctx.save();
           ctx.strokeStyle = cssColor("--chart-hover-ring");
@@ -2298,30 +2566,13 @@ HTML_TEMPLATE = r"""<!doctype html>
           ctx.stroke();
           ctx.restore();
         }
-        const labelPoints = projected
-          .filter(point => point.row.pareto.optimal || point.row.pareto.suboptimal)
-          .sort((left, right) => Number(right.row.pareto.optimal) - Number(left.row.pareto.optimal));
-        for (const point of labelPoints) {
-          if (point.row.pareto.optimal || point.row.pareto.suboptimal) {
-            ctx.fillStyle = point.row.pareto.optimal ? cssColor("--chart-optimal-label") : cssColor("--chart-suboptimal-label");
-            ctx.font = "700 12px sans-serif";
-            drawLaidOutLabel(
-              ctx,
-              point.row.model,
-              point.x,
-              point.y,
-              modelLabelBounds,
-              occupiedLabels,
-              {
-                avoidSegments: trendSegment ? [trendSegment] : [],
-                halo: true,
-                haloWidth: 2,
-                labelGap: 4,
-                lineGap: 8,
-              },
-            );
-          }
-        }
+        const labelPoints = projected.filter(point => (
+          point.row.pareto.optimal || point.row.pareto.suboptimal
+        ));
+        const labelLayout = layoutModelLabels(ctx, labelPoints, modelLabelBounds, {
+          avoidSegments: trendSegment ? [trendSegment] : [],
+        });
+        drawModelLabels(ctx, labelLayout);
         ctx.restore();
         canvas._points = projected;
       }
@@ -2695,18 +2946,16 @@ HTML_TEMPLATE = r"""<!doctype html>
             y: norm(row, categories[1], ranges[1]),
             z: norm(row, categories[2], ranges[2]),
           };
-          return { row, ...project(rotate(point), width, height) };
+          return {
+            row,
+            ...project(rotate(point), width, height),
+            radius: row.pareto.optimal ? 6 : 4.2,
+            fillStyle: pointColor(row),
+            alpha: row.pareto.optimal ? 0.92 : row.pareto.suboptimal ? 0.78 : 0.92,
+          };
         }).sort((a, b) => a.depth - b.depth);
 
-        for (const point of projected) {
-          const radius = point.row.pareto.optimal ? 6 : 4.2;
-          ctx.globalAlpha = point.row.pareto.optimal ? 0.92 : point.row.pareto.suboptimal ? 0.78 : 0.92;
-          ctx.beginPath();
-          ctx.fillStyle = pointColor(point.row);
-          ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        }
+        for (const point of projected) drawProjectedPoint(ctx, point);
         if (hover) {
           ctx.save();
           ctx.strokeStyle = cssColor("--chart-hover-ring");
@@ -2716,23 +2965,19 @@ HTML_TEMPLATE = r"""<!doctype html>
           ctx.stroke();
           ctx.restore();
         }
-        const occupiedLabels = [];
-        const labelPoints = projected
-          .filter(point => point.row.pareto.optimal || point.row.pareto.suboptimal)
-          .sort((left, right) => Number(right.row.pareto.optimal) - Number(left.row.pareto.optimal));
-        for (const point of labelPoints) {
-          ctx.fillStyle = point.row.pareto.optimal ? cssColor("--chart-optimal-label") : cssColor("--chart-suboptimal-label");
-          ctx.font = "700 12px sans-serif";
-          drawLaidOutLabel(
-            ctx,
-            point.row.model,
-            point.x,
-            point.y,
-            { left: 8, right: width - 8, top: 8, bottom: height - 8 },
-            occupiedLabels,
-            { halo: true, haloWidth: 2, labelGap: 4 },
-          );
-        }
+        const labelPoints = projected.filter(point => (
+          (point.row.pareto.optimal || point.row.pareto.suboptimal) &&
+          point.x >= -point.radius &&
+          point.x <= width + point.radius &&
+          point.y >= -point.radius &&
+          point.y <= height + point.radius
+        ));
+        const labelLayout = layoutModelLabels(
+          ctx,
+          labelPoints,
+          { left: 8, right: width - 8, top: 8, bottom: height - 8 },
+        );
+        drawModelLabels(ctx, labelLayout);
         canvas._points = projected;
       }
 
@@ -3125,12 +3370,14 @@ HTML_TEMPLATE = r"""<!doctype html>
     } else {
       applyUrlOptions();
       applySelection();
-      fetchCsvFromPaths(["data/results.csv", "../data/results.csv"])
-        .then(text => initializeFromCsv(parseCsv(text)))
-        .catch(() => {
-          updateScoreScale();
-          updateSummary();
-        });
+      if (window.location.protocol !== "file:") {
+        fetchCsvFromPaths(["data/results.csv", "../data/results.csv"])
+          .then(text => initializeFromCsv(parseCsv(text)))
+          .catch(() => {
+            updateScoreScale();
+            updateSummary();
+          });
+      }
     }
   </script>
 </body>
