@@ -46,7 +46,8 @@ AA_ROWS = [
     {"model": "GPT-5.6 Luna (max)", "artificial_analysis_intelligence_index": "51"},
     {"model": "GPT-5.6 Luna (xhigh)", "artificial_analysis_intelligence_index": "49"},
     {"model": "GLM-5.1", "artificial_analysis_intelligence_index": "44"},
-    {"model": "Kimi K3", "artificial_analysis_intelligence_index": "55"},
+    {"model": "Kimi K3 (max)", "artificial_analysis_intelligence_index": "57"},
+    {"model": "Kimi K3 (low)", "artificial_analysis_intelligence_index": "47"},
     {"model": "Kimi K2.7 Code", "artificial_analysis_intelligence_index": "38"},
     {"model": "Kimi K2.6", "artificial_analysis_intelligence_index": "36"},
     {"model": "Kimi K2.6", "artificial_analysis_intelligence_index": "39"},
@@ -94,6 +95,10 @@ def test_exact_table_collapses_tiered_rows_and_calculates_examples() -> None:
         "Kimi K3",
     ]
     assert by_model(rows, "Kimi K3")["opencode_go_blended_usd_per_1m_tokens"] == "2.31"
+    kimi = by_model(rows, "Kimi K3")
+    assert kimi["artificial_analysis_model"] == "Kimi K3 (max)"
+    assert kimi["artificial_analysis_intelligence_index"] == "57"
+    assert float(kimi["value_score"]) == pytest.approx(53.3638802011)
 
     flash = by_model(rows, "DeepSeek V4 Flash")
     assert flash["artificial_analysis_model"] == "DeepSeek V4 Flash 0731 (max)"

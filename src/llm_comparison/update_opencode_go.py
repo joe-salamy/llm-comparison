@@ -52,7 +52,7 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
         "GPT-5.6 Luna (low)",
         "GPT-5.6 Luna (Non-reasoning)",
     ),
-    "Kimi K3": ("Kimi K3",),
+    "Kimi K3": ("Kimi K3 (max)", "Kimi K3 (low)"),
     "Kimi K2.7 Code": ("Kimi K2.7 Code",),
     "Kimi K2.6": ("Kimi K2.6",),
     "MiMo V2.5": ("MiMo-V2.5",),
