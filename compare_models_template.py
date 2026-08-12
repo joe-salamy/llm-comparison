@@ -727,7 +727,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       <div>
         <h1 id="pageTitle">LLM Comparison</h1>
         <div class="meta-stack">
-          <div class="meta" id="dataFreshness">Data updated: 2026-08-09T15:52:19Z</div>
+          <div class="meta" id="dataFreshness">Data updated: 2026-08-12T18:11:46Z</div>
           <div class="meta" id="summary"></div>
         </div>
       </div>
@@ -852,7 +852,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   </main>
   <script>
     const payload = __PAYLOAD__;
-    const dataUpdated = "2026-08-09T15:52:19Z";
+    const dataUpdated = "2026-08-12T18:11:46Z";
     const displayLabels = {
       model: "Model",
       context_window_tokens: "Context Window",
@@ -1908,6 +1908,30 @@ HTML_TEMPLATE = r"""<!doctype html>
         { dx: -labelWidth / 2, dy: 28 },
         { dx: 14, dy: 4 },
         { dx: -labelWidth - 14, dy: 4 },
+        { dx: 26, dy: -26 },
+        { dx: 26, dy: 30 },
+        { dx: -labelWidth - 26, dy: -26 },
+        { dx: -labelWidth - 26, dy: 30 },
+        { dx: -labelWidth / 2, dy: -46 },
+        { dx: -labelWidth / 2, dy: 48 },
+        { dx: 30, dy: 2 },
+        { dx: -labelWidth - 30, dy: 2 },
+        { dx: 48, dy: -44 },
+        { dx: 48, dy: 48 },
+        { dx: -labelWidth - 48, dy: -44 },
+        { dx: -labelWidth - 48, dy: 48 },
+        { dx: -labelWidth / 2, dy: -66 },
+        { dx: -labelWidth / 2, dy: 70 },
+        { dx: 52, dy: 0 },
+        { dx: -labelWidth - 52, dy: 0 },
+        { dx: 90, dy: -80 },
+        { dx: 90, dy: 84 },
+        { dx: -labelWidth - 90, dy: -80 },
+        { dx: -labelWidth - 90, dy: 84 },
+        { dx: -labelWidth / 2, dy: -110 },
+        { dx: -labelWidth / 2, dy: 112 },
+        { dx: 96, dy: -4 },
+        { dx: -labelWidth - 96, dy: -4 },
       ];
       return offsets.map((offset, candidateIndex) => {
         let x = point.x + offset.dx;
@@ -1918,6 +1942,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         y += clamped(rawBounds.top, bounds.top, bounds.bottom) - rawBounds.top;
         y += clamped(rawBounds.bottom, bounds.top, bounds.bottom) - rawBounds.bottom;
         const labelBounds = labelBoundsFor(ctx, text, x, y, 3, maxWidth);
+        const leader = candidateIndex < 8 ? null : leaderFor(point, labelBounds);
         const reservedBounds = expandedRect(labelBounds, 4);
         const labelOverlapCount = occupied.filter(rect => rectsIntersect(labelBounds, rect)).length;
         const markerIntersectionCount = markers.filter(marker => (
@@ -1926,7 +1951,12 @@ HTML_TEMPLATE = r"""<!doctype html>
         const avoidOrLeaderIntersectionCount = [
           ...avoidSegments,
           ...leaders,
-        ].filter(segment => segmentIntersectsRect(segment, reservedBounds)).length;
+        ].filter(segment => (
+          segmentIntersectsRect(segment, reservedBounds) ||
+          (leader !== null && segmentIntersects(leader.start, leader.end, segment.start, segment.end))
+        )).length + (
+          leader !== null ? occupied.filter(rect => segmentIntersectsRect(leader, rect)).length : 0
+        );
         return {
           point,
           text,
@@ -1934,11 +1964,12 @@ HTML_TEMPLATE = r"""<!doctype html>
           y,
           bounds: labelBounds,
           maxWidth,
-          leader: null,
+          leader,
           tuple: [
             labelOverlapCount,
             markerIntersectionCount,
             avoidOrLeaderIntersectionCount,
+            leader !== null ? 1 : 0,
             Math.hypot(offset.dx, offset.dy),
             candidateIndex,
           ],
@@ -2039,6 +2070,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         if (nearby) {
           placements.push({ ...nearby, font, fontSize, textAlign: "left" });
           occupied.push(expandedRect(nearby.bounds, 4));
+          if (nearby.leader) leaders.push(nearby.leader);
         } else {
           callouts.push(point);
         }
@@ -2102,18 +2134,22 @@ HTML_TEMPLATE = r"""<!doctype html>
           textAlign: "left",
         });
         optimalLayout.occupied.push(expandedRect(selected.bounds, 4));
+        if (selected.leader) optimalLayout.leaders.push(selected.leader);
       }
       return { placements, hidden };
     }
 
     function drawModelLabels(ctx, layout) {
       ctx.save();
-      ctx.strokeStyle = cssColor("--chart-optimal-label");
       ctx.lineWidth = 1;
       ctx.globalAlpha = 0.55;
       ctx.setLineDash([]);
+      ctx.lineCap = "round";
       for (const placement of layout.placements) {
         if (!placement.leader) continue;
+        ctx.strokeStyle = placement.point.row.pareto.optimal
+          ? cssColor("--chart-optimal-label")
+          : cssColor("--chart-suboptimal-label");
         ctx.beginPath();
         ctx.moveTo(placement.leader.start.x, placement.leader.start.y);
         ctx.lineTo(placement.leader.end.x, placement.leader.end.y);
