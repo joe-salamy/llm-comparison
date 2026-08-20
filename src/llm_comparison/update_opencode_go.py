@@ -42,6 +42,7 @@ CSV_COLUMNS = [
 
 AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
     "Grok 4.5": ("Grok 4.5 (high)",),
+    "GLM-5.3": ("GLM-5.3 (max)",),
     "GLM-5.2": ("GLM-5.2 (max)", "GLM-5.2"),
     "GLM-5.1": ("GLM-5.1",),
     "GPT 5.6 Luna": (
@@ -60,15 +61,42 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
     "MiniMax M3": ("MiniMax-M3",),
     "MiniMax M2.7": ("MiniMax-M2.7",),
     "MiniMax M2.5": (),
+    "Muse Spark 1.2 Contributor": ("Muse Spark 1.2 (xhigh)",),
+    "Qwen3.8 Max": ("Qwen3.8 Max",),
     "Qwen3.7 Max": ("Qwen3.7 Max",),
     "Qwen3.7 Plus": ("Qwen3.7 Plus",),
     "Qwen3.6 Plus": ("Qwen3.6 Plus",),
     "DeepSeek V4 Pro": (
+        "DeepSeek V4 Pro 0813 (max)",
         "DeepSeek V4 Pro (max)",
         "DeepSeek V4 Pro (high)",
         "DeepSeek V4 Pro",
     ),
     "DeepSeek V4 Flash": (
+        "DeepSeek V4 Flash 0731 (max)",
+        "DeepSeek V4 Flash (max)",
+        "DeepSeek V4 Flash (high)",
+        "DeepSeek V4 Flash",
+    ),
+    "DeepSeek V4 Pro (Off-Peak)": (
+        "DeepSeek V4 Pro 0813 (max)",
+        "DeepSeek V4 Pro (max)",
+        "DeepSeek V4 Pro (high)",
+        "DeepSeek V4 Pro",
+    ),
+    "DeepSeek V4 Pro (Peak)": (
+        "DeepSeek V4 Pro 0813 (max)",
+        "DeepSeek V4 Pro (max)",
+        "DeepSeek V4 Pro (high)",
+        "DeepSeek V4 Pro",
+    ),
+    "DeepSeek V4 Flash (Off-Peak)": (
+        "DeepSeek V4 Flash 0731 (max)",
+        "DeepSeek V4 Flash (max)",
+        "DeepSeek V4 Flash (high)",
+        "DeepSeek V4 Flash",
+    ),
+    "DeepSeek V4 Flash (Peak)": (
         "DeepSeek V4 Flash 0731 (max)",
         "DeepSeek V4 Flash (max)",
         "DeepSeek V4 Flash (high)",
@@ -359,24 +387,66 @@ def parse_intelligence_index(value: str | None) -> Decimal | None:
     return parsed if parsed.is_finite() else None
 
 
+def _normalize_model_name(value: str) -> str:
+    normalized = normalize_text(value).lower()
+    normalized = normalized.replace("_", " ").replace("-", " ")
+    return " ".join(normalized.split())
+
+
 def select_aa_candidate(
     model: str, aa_rows: list[dict[str, str]]
 ) -> tuple[str, Decimal] | None:
-    aliases = AA_MODEL_ALIASES.get(model, ())
+    aliases = AA_MODEL_ALIASES.get(model)
+    if aliases is not None and len(aliases) == 0:
+        return None
     best: tuple[Decimal, int, int, str] | None = None
-    for row_index, row in enumerate(aa_rows):
-        display_name = row.get("model", "")
-        if display_name not in aliases:
-            continue
-        value = parse_intelligence_index(
-            row.get("artificial_analysis_intelligence_index")
-        )
-        if value is None:
-            continue
-        alias_index = aliases.index(display_name)
-        candidate = (value, -alias_index, -row_index, display_name)
-        if best is None or candidate[:3] > best[:3]:
-            best = candidate
+    if aliases is not None:
+        normalized_aliases = [_normalize_model_name(alias) for alias in aliases]
+        alias_lookup = {norm: idx for idx, norm in enumerate(normalized_aliases)}
+        for row_index, row in enumerate(aa_rows):
+            display_name = row.get("model", "")
+            normalized_display = _normalize_model_name(display_name)
+            alias_index = alias_lookup.get(normalized_display)
+            if alias_index is None:
+                continue
+            value = parse_intelligence_index(
+                row.get("artificial_analysis_intelligence_index")
+            )
+            if value is None:
+                continue
+            candidate = (value, -alias_index, -row_index, display_name)
+            if best is None or candidate[:3] > best[:3]:
+                best = candidate
+        if best is not None:
+            return (best[3], best[0])
+    # Generic fallback for models not in AA_MODEL_ALIASES: try normalized
+    # exact or prefix match (e.g., "GLM-5.3" -> "GLM-5.3 (max)") so new
+    # OpenCode Go models with slight convention differences don't get skipped
+    # even without an explicit alias entry.
+    if aliases is None:
+        normalized_model = _normalize_model_name(model)
+        generic_best: tuple[Decimal, int, int, str] | None = None
+        for row_index, row in enumerate(aa_rows):
+            display_name = row.get("model", "")
+            normalized_display = _normalize_model_name(display_name)
+            if not (
+                normalized_display == normalized_model
+                or normalized_display.startswith(normalized_model + " ")
+                or normalized_display.startswith(normalized_model + " (")
+            ):
+                continue
+            value = parse_intelligence_index(
+                row.get("artificial_analysis_intelligence_index")
+            )
+            if value is None:
+                continue
+            # Prefer shorter suffix when intelligence ties, then earlier row
+            suffix_len = len(normalized_display) - len(normalized_model)
+            candidate = (value, -suffix_len, -row_index, display_name)
+            if generic_best is None or candidate[:3] > generic_best[:3]:
+                generic_best = candidate
+        if generic_best is not None:
+            return (generic_best[3], generic_best[0])
     return None if best is None else (best[3], best[0])
 
 
