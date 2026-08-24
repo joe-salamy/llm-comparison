@@ -238,7 +238,7 @@ def test_invalid_blended_prices_are_rejected(value: Decimal) -> None:
         updater.blended_price(value, Decimal("0"), Decimal("0"))
 
 
-@pytest.mark.parametrize("value", ["1.00", "$nan", "$-1", "$1x", "", "-"])
+@pytest.mark.parametrize("value", ["1.00", "$nan", "$-1", "$1x", ""])
 def test_malformed_required_currency_is_rejected(value: str) -> None:
     rows = [row.copy() for row in SOURCE_ROWS]
     rows[0][1] = value
@@ -246,6 +246,19 @@ def test_malformed_required_currency_is_rejected(value: str) -> None:
         updater.parse_source_rows(HEADERS, rows)
 
 
+def test_dash_pricing_parses_as_free_zero() -> None:
+    rows = [row.copy() for row in SOURCE_ROWS]
+    rows[0][1] = "-"
+    rows[0][2] = "-"
+    rows[0][3] = "-"
+    parsed = updater.parse_source_rows(HEADERS, rows)
+    assert parsed[0]["input_price"] == Decimal(0)
+    assert parsed[0]["output_price"] == Decimal(0)
+    assert parsed[0]["cache_read_price"] == Decimal(0)
+    # Usage dash means blank (free, no dollar limit)
+    rows[0][5] = "-"
+    parsed = updater.parse_source_rows(HEADERS, rows)
+    assert parsed[0]["monthly_usage"] is None
 def test_blank_cached_write_parses_only_dash() -> None:
     parsed = updater.parse_source_rows(HEADERS, SOURCE_ROWS)
     assert parsed[0]["cache_write_price"] is None
@@ -253,7 +266,6 @@ def test_blank_cached_write_parses_only_dash() -> None:
     rows[0][4] = ""
     with pytest.raises(RuntimeError, match="Cached Write"):
         updater.parse_source_rows(HEADERS, rows)
-
 
 @pytest.mark.parametrize("missing_index", range(6))
 def test_missing_required_source_cells_fail(missing_index: int) -> None:

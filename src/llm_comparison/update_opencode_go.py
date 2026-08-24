@@ -102,7 +102,20 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
         "DeepSeek V4 Flash (high)",
         "DeepSeek V4 Flash",
     ),
+    "DeepSeek V4 Flash Vision Exp (Off-Peak)": (
+        "DeepSeek V4 Flash 0731 (max)",
+        "DeepSeek V4 Flash (max)",
+        "DeepSeek V4 Flash (high)",
+        "DeepSeek V4 Flash",
+    ),
+    "DeepSeek V4 Flash Vision Exp (Peak)": (
+        "DeepSeek V4 Flash 0731 (max)",
+        "DeepSeek V4 Flash (max)",
+        "DeepSeek V4 Flash (high)",
+        "DeepSeek V4 Flash",
+    ),
     "Hy3": ("Hy3",),
+    "Ox Alpha Free": (),
 }
 
 TIER_LABEL_PATTERN = re.compile(
@@ -117,7 +130,7 @@ class PriceRow(TypedDict):
     output_price: Decimal
     cache_read_price: Decimal
     cache_write_price: Decimal | None
-    monthly_usage: Decimal
+    monthly_usage: Decimal | None
     long_context: bool
     tier_threshold_tokens: int | None
 
@@ -212,10 +225,12 @@ def parse_source_rows(headers: list[str], rows: list[list[str]]) -> list[PriceRo
             (1, "Input"),
             (2, "Output"),
             (3, "Cached Read"),
-            (5, "Usage"),
         ):
             if not values[index]:
                 raise RuntimeError(f"OpenCode Go {source_label!r} is missing {field}")
+        # Usage may be "-" for free models (Ox Alpha Free) -> blank
+        if not values[5] and normalize_text(cells[5]) != "-":
+            raise RuntimeError(f"OpenCode Go {source_label!r} is missing Usage")
 
         tier_match = TIER_LABEL_PATTERN.fullmatch(source_label)
         if tier_match is not None:
@@ -230,25 +245,42 @@ def parse_source_rows(headers: list[str], rows: list[list[str]]) -> list[PriceRo
             model = source_label
             long_context = False
             tier_threshold_tokens = None
-        input_price = parse_currency(
-            values[1], field="Input", source_label=source_label
-        )
-        output_price = parse_currency(
-            values[2], field="Output", source_label=source_label
-        )
-        cache_read_price = parse_currency(
-            values[3], field="Cached Read", source_label=source_label
-        )
+
+        if normalize_text(values[1]) == "-":
+            input_price = Decimal(0)
+        else:
+            parsed = parse_currency(
+                values[1], field="Input", source_label=source_label
+            )
+            assert parsed is not None
+            input_price = parsed
+        if normalize_text(values[2]) == "-":
+            output_price = Decimal(0)
+        else:
+            parsed = parse_currency(
+                values[2], field="Output", source_label=source_label
+            )
+            assert parsed is not None
+            output_price = parsed
+        if normalize_text(values[3]) == "-":
+            cache_read_price = Decimal(0)
+        else:
+            parsed = parse_currency(
+                values[3], field="Cached Read", source_label=source_label
+            )
+            assert parsed is not None
+            cache_read_price = parsed
         cache_write_price = parse_currency(
             values[4], field="Cached Write", source_label=source_label, allow_blank=True
         )
-        monthly_usage = parse_currency(
-            values[5], field="Usage", source_label=source_label
-        )
-        assert input_price is not None
-        assert output_price is not None
-        assert cache_read_price is not None
-        assert monthly_usage is not None
+        if normalize_text(values[5]) == "-":
+            monthly_usage = None
+        else:
+            parsed = parse_currency(
+                values[5], field="Usage", source_label=source_label
+            )
+            assert parsed is not None
+            monthly_usage = parsed
         parsed_rows.append(
             {
                 "source_label": source_label,
@@ -481,11 +513,37 @@ def enrich_rows(
     output: list[dict[str, str]] = []
     for source in rows:
         row = source.copy()
-        primary_blend = blended_price(
-            Decimal(row["cache_read_usd_per_1m_tokens"]),
-            Decimal(row["input_price_usd_per_1m_tokens"]),
-            Decimal(row["output_price_usd_per_1m_tokens"]),
-        )
+        cache_read = Decimal(row["cache_read_usd_per_1m_tokens"] or "0")
+        input_price = Decimal(row["input_price_usd_per_1m_tokens"] or "0")
+        output_price = Decimal(row["output_price_usd_per_1m_tokens"] or "0")
+        is_free = cache_read == 0 and input_price == 0 and output_price == 0
+        if is_free:
+            row["opencode_go_blended_usd_per_1m_tokens"] = "0"
+            # Long-context free not expected, but handle if present and zero.
+            if row["long_context_threshold_tokens"]:
+                lc_cache = Decimal(
+                    row["long_context_cache_read_usd_per_1m_tokens"] or "0"
+                )
+                lc_input = Decimal(
+                    row["long_context_input_price_usd_per_1m_tokens"] or "0"
+                )
+                lc_output = Decimal(
+                    row["long_context_output_price_usd_per_1m_tokens"] or "0"
+                )
+                if lc_cache == 0 and lc_input == 0 and lc_output == 0:
+                    row["long_context_blended_usd_per_1m_tokens"] = "0"
+                else:
+                    long_blend = blended_price(lc_cache, lc_input, lc_output)
+                    row["long_context_blended_usd_per_1m_tokens"] = decimal_text(
+                        long_blend
+                    )
+            # Free tier has no cost-adjusted intelligence;
+            # leave value_score blank even if alias exists.
+            # Alias is empty for Ox Alpha Free.
+            output.append(row)
+            continue
+
+        primary_blend = blended_price(cache_read, input_price, output_price)
         row["opencode_go_blended_usd_per_1m_tokens"] = decimal_text(primary_blend)
 
         if row["long_context_threshold_tokens"]:
