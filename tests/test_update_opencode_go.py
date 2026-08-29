@@ -98,13 +98,15 @@ def test_exact_table_collapses_tiered_rows_and_calculates_examples() -> None:
     kimi = by_model(rows, "Kimi K3")
     assert kimi["artificial_analysis_model"] == "Kimi K3 (max)"
     assert kimi["artificial_analysis_intelligence_index"] == "57"
-    assert float(kimi["value_score"]) == pytest.approx(53.3638802011)
+    assert float(kimi["value_score"]) == pytest.approx(65.1247927916)
+    assert kimi["opencode_go_effective_usd_per_1m_tokens"] == "0.154"
 
     flash = by_model(rows, "DeepSeek V4 Flash")
     assert flash["artificial_analysis_model"] == "DeepSeek V4 Flash 0731 (max)"
     assert flash["artificial_analysis_intelligence_index"] == "50"
     assert flash["opencode_go_blended_usd_per_1m_tokens"] == "0.05796"
-    assert float(flash["value_score"]) == pytest.approx(62.3687162320)
+    assert float(flash["value_score"]) == pytest.approx(80.1502287358)
+    assert flash["opencode_go_effective_usd_per_1m_tokens"] == "0.000966"
 
     luna = by_model(rows, "GPT 5.6 Luna")
     assert luna["long_context_threshold_tokens"] == "272000"
@@ -112,12 +114,15 @@ def test_exact_table_collapses_tiered_rows_and_calculates_examples() -> None:
     assert luna["artificial_analysis_intelligence_index"] == "51"
     assert luna["opencode_go_blended_usd_per_1m_tokens"] == "0.174"
     assert luna["long_context_blended_usd_per_1m_tokens"] == "0.288"
+    assert luna["opencode_go_effective_usd_per_1m_tokens"] == "0.0116"
+    assert luna["long_context_effective_usd_per_1m_tokens"] == "0.0192"
 
     qwen = by_model(rows, "Qwen3.7 Plus")
     assert qwen["long_context_threshold_tokens"] == "256000"
     assert qwen["opencode_go_blended_usd_per_1m_tokens"] == "0.268"
     assert qwen["long_context_blended_usd_per_1m_tokens"] == "0.804"
-
+    assert qwen["opencode_go_effective_usd_per_1m_tokens"] == "0.004466666666666666666666666667"
+    assert qwen["long_context_effective_usd_per_1m_tokens"] == "0.0134"
 
 def test_unranked_model_and_alias_selection_are_strict() -> None:
     rows = output_rows()
@@ -163,6 +168,18 @@ def test_usage_does_not_change_blend_value_or_rank() -> None:
     changed = updater.build_output_rows(
         HEADERS, changed_source, AA_ROWS, scraped_at=SCRAPED_AT
     )
+    # Blended price must not change when only quota (Usage) changes.
+    assert by_model(rows, "DeepSeek V4 Flash")[
+        "opencode_go_blended_usd_per_1m_tokens"
+    ] == by_model(changed, "DeepSeek V4 Flash")[
+        "opencode_go_blended_usd_per_1m_tokens"
+    ]
+    # Effective price and value_score must change with quota.
+    assert by_model(rows, "DeepSeek V4 Flash")[
+        "opencode_go_effective_usd_per_1m_tokens"
+    ] != by_model(changed, "DeepSeek V4 Flash")[
+        "opencode_go_effective_usd_per_1m_tokens"
+    ]
     original_scores = sorted(
         ((row["model"], row["value_score"]) for row in rows),
         key=lambda item: item[1],
@@ -171,7 +188,25 @@ def test_usage_does_not_change_blend_value_or_rank() -> None:
         ((row["model"], row["value_score"]) for row in changed),
         key=lambda item: item[1],
     )
-    assert original_scores == changed_scores
+    assert original_scores != changed_scores
+
+
+def test_quota_adjusted_effective_price_is_blended_divided_by_quota() -> None:
+    rows = output_rows()
+    for row in rows:
+        blended = row["opencode_go_blended_usd_per_1m_tokens"]
+        effective = row["opencode_go_effective_usd_per_1m_tokens"]
+        quota = row["monthly_usage_usd"]
+        if not blended or blended == "0" or not quota:
+            assert effective == ""
+            continue
+        expected = Decimal(blended) / Decimal(quota)
+        assert Decimal(effective) == expected
+        if row["long_context_blended_usd_per_1m_tokens"]:
+            long_blended = row["long_context_blended_usd_per_1m_tokens"]
+            long_effective = row["long_context_effective_usd_per_1m_tokens"]
+            assert Decimal(long_effective) == Decimal(long_blended) / Decimal(quota)
+
 
 
 @pytest.mark.parametrize(

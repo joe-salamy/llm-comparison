@@ -846,7 +846,9 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
             "opencode_go_blended_usd_per_1m_tokens": "0.05796",
             "long_context_blended_usd_per_1m_tokens": "",
             "monthly_usage_usd": "60",
-            "value_score": "52.36871623200863025402473033",
+            "opencode_go_effective_usd_per_1m_tokens": "0.000966",
+            "long_context_effective_usd_per_1m_tokens": "",
+            "value_score": "70.15022873584506657911239831",
             "scraped_at": "2026-07-17T14:32:05Z",
         },
         {
@@ -859,6 +861,8 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
             "opencode_go_blended_usd_per_1m_tokens": "0.222",
             "long_context_blended_usd_per_1m_tokens": "",
             "monthly_usage_usd": "60",
+            "opencode_go_effective_usd_per_1m_tokens": "0.0037",
+            "long_context_effective_usd_per_1m_tokens": "",
             "value_score": "",
             "scraped_at": "2026-07-17T14:32:05Z",
         },
@@ -893,20 +897,23 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
         "Cached Write",
         "Blended Price",
         ">256K Blended Price",
-        "Usage",
+        "Monthly Quota",
+        "Effective Price",
+        ">256K Effective Price",
         "Cost-adjusted intelligence",
     ]
     assert all(column["key"] != "scraped_at" for column in go["columns"])
     ranked, unranked = go["rows"]
-    assert ranked["score"] == 52.36871623200863
+    assert ranked["score"] == pytest.approx(70.15022873584507)
     assert ranked["cells"]["value_score"] == {
-        "display": "52.37",
-        "sort": 52.36871623200863,
+        "display": "70.15",
+        "sort": pytest.approx(70.15022873584507),
     }
     assert (
         ranked["cells"]["opencode_go_blended_usd_per_1m_tokens"]["display"]
         == "$0.05796"
     )
+    assert ranked["cells"]["opencode_go_effective_usd_per_1m_tokens"]["display"] == "$0.000966"
     assert ranked["cells"]["monthly_usage_usd"]["display"] == "$60"
     assert unranked["score"] is None
     assert (
@@ -918,8 +925,8 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
     assert unranked["pareto"] == {"optimal": False, "suboptimal": False}
     assert go["categories"] == [
         {
-            "key": "opencode_go_blended_usd_per_1m_tokens",
-            "label": "OpenCode Go blended price ($/1M tokens)",
+            "key": "opencode_go_effective_usd_per_1m_tokens",
+            "label": "OpenCode Go effective price (blended ÷ quota)",
             "lowerIsBetter": True,
         },
         {
@@ -929,15 +936,14 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
         },
     ]
     assert go["graphCategories"] == [
-        "opencode_go_blended_usd_per_1m_tokens",
+        "opencode_go_effective_usd_per_1m_tokens",
         "artificial_analysis_intelligence_index",
     ]
     assert go["sourceUrl"] == "https://opencode.ai/docs/go/"
-    assert go["formula"] == "(7 × cached read + 2 × input + output) ÷ 10"
+    assert go["formula"] == "((7 × cached read + 2 × input + output) ÷ 10) ÷ monthly quota"
     assert go["scrapedAt"] == "2026-07-17T14:32:05Z"
     assert "Ranked <\\/script>" in html
     assert "<\\/script>" in html
-
 
 @pytest.mark.parametrize(
     "rows",
@@ -990,14 +996,14 @@ def test_report_contains_semantic_navigation_and_go_bootstrap(tmp_path: Path) ->
     assert '[...payload.columns.map(column => column.key), "scraped_at"]' in html
     assert "payload.scrapedAt = scrapedAt;" in html
     assert (
-        "Usage and cached-write prices are displayed but excluded from the score."
+        "Monthly quota and blended prices are displayed; effective price (blended ÷ quota) drives the score."
         in html
     )
     assert (
         "Cost-adjusted intelligence = Intelligence − 10 × log₁₀"
-        "(blended price ÷ $1 per 1M tokens)." in html
+        "(effective price), where effective price = blended price ÷ monthly quota." in html
     )
-    assert "A 10-point Intelligence gain offsets a 10× higher blended price." in html
+    assert "A 10-point Intelligence gain offsets a 10× higher effective price." in html
     assert "ranked by cost-adjusted intelligence" in html
     assert '"Cost-adjusted intelligence" : "Final Score"' in html
     go_bootstrap = html[

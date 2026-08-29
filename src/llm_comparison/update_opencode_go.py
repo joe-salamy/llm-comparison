@@ -36,6 +36,8 @@ CSV_COLUMNS = [
     "artificial_analysis_intelligence_index",
     "opencode_go_blended_usd_per_1m_tokens",
     "long_context_blended_usd_per_1m_tokens",
+    "opencode_go_effective_usd_per_1m_tokens",
+    "long_context_effective_usd_per_1m_tokens",
     "value_score",
     "scraped_at",
 ]
@@ -481,7 +483,6 @@ def select_aa_candidate(
             return (generic_best[3], generic_best[0])
     return None if best is None else (best[3], best[0])
 
-
 def blended_price(
     cache_read: Decimal, input_price: Decimal, output_price: Decimal
 ) -> Decimal:
@@ -495,17 +496,51 @@ def blended_price(
     return result
 
 
-def cost_adjusted_intelligence(
-    intelligence: Decimal, blended_price: Decimal
-) -> Decimal:
-    if not intelligence.is_finite() or intelligence < 0:
-        raise RuntimeError("OpenCode Go intelligence must be finite and non-negative")
-    if not blended_price.is_finite() or blended_price <= 0:
+def effective_price(blended: Decimal, quota: Decimal) -> Decimal:
+    if not blended.is_finite() or blended <= 0:
         raise RuntimeError(
             "OpenCode Go blended price must be finite and greater than zero"
         )
-    return intelligence - Decimal(10) * blended_price.log10()
+    if not quota.is_finite() or quota <= 0:
+        raise RuntimeError(
+            "OpenCode Go monthly quota must be finite and greater than zero"
+        )
+    result = blended / quota
+    if not result.is_finite() or result <= 0:
+        raise RuntimeError(
+            "OpenCode Go effective price must be finite and greater than zero"
+        )
+    return result
 
+
+def cost_adjusted_intelligence(
+    intelligence: Decimal, effective_blended_price: Decimal
+) -> Decimal:
+    if not intelligence.is_finite() or intelligence < 0:
+        raise RuntimeError("OpenCode Go intelligence must be finite and non-negative")
+    if not effective_blended_price.is_finite() or effective_blended_price <= 0:
+        raise RuntimeError(
+            "OpenCode Go effective price must be finite and greater than zero"
+        )
+    return intelligence - Decimal(10) * effective_blended_price.log10()
+
+
+def parse_quota(value: str | None) -> Decimal | None:
+    normalized = normalize_text(value or "")
+    if not normalized:
+        return None
+    # Stored values are plain decimals (e.g., "15") but accept "$15" for robustness.
+    if normalized.startswith("$"):
+        normalized = normalized[1:].strip()
+        if not normalized:
+            return None
+    try:
+        parsed = Decimal(normalized)
+    except InvalidOperation:
+        return None
+    if not parsed.is_finite() or parsed <= 0:
+        return None
+    return parsed
 
 def enrich_rows(
     rows: list[dict[str, str]], aa_rows: list[dict[str, str]]
@@ -519,6 +554,7 @@ def enrich_rows(
         is_free = cache_read == 0 and input_price == 0 and output_price == 0
         if is_free:
             row["opencode_go_blended_usd_per_1m_tokens"] = "0"
+            row["opencode_go_effective_usd_per_1m_tokens"] = ""
             # Long-context free not expected, but handle if present and zero.
             if row["long_context_threshold_tokens"]:
                 lc_cache = Decimal(
@@ -532,11 +568,22 @@ def enrich_rows(
                 )
                 if lc_cache == 0 and lc_input == 0 and lc_output == 0:
                     row["long_context_blended_usd_per_1m_tokens"] = "0"
+                    row["long_context_effective_usd_per_1m_tokens"] = ""
                 else:
                     long_blend = blended_price(lc_cache, lc_input, lc_output)
                     row["long_context_blended_usd_per_1m_tokens"] = decimal_text(
                         long_blend
                     )
+                    quota = parse_quota(row.get("monthly_usage_usd") or row.get("monthly_quota_usd"))
+                    if quota is not None:
+                        long_effective = effective_price(long_blend, quota)
+                        row["long_context_effective_usd_per_1m_tokens"] = decimal_text(
+                            long_effective
+                        )
+                    else:
+                        row["long_context_effective_usd_per_1m_tokens"] = ""
+            else:
+                row["long_context_effective_usd_per_1m_tokens"] = ""
             # Free tier has no cost-adjusted intelligence;
             # leave value_score blank even if alias exists.
             # Alias is empty for Ox Alpha Free.
@@ -546,6 +593,13 @@ def enrich_rows(
         primary_blend = blended_price(cache_read, input_price, output_price)
         row["opencode_go_blended_usd_per_1m_tokens"] = decimal_text(primary_blend)
 
+        quota = parse_quota(row.get("monthly_usage_usd") or row.get("monthly_quota_usd"))
+        if quota is not None:
+            primary_effective = effective_price(primary_blend, quota)
+            row["opencode_go_effective_usd_per_1m_tokens"] = decimal_text(primary_effective)
+        else:
+            row["opencode_go_effective_usd_per_1m_tokens"] = ""
+
         if row["long_context_threshold_tokens"]:
             long_blend = blended_price(
                 Decimal(row["long_context_cache_read_usd_per_1m_tokens"]),
@@ -553,14 +607,29 @@ def enrich_rows(
                 Decimal(row["long_context_output_price_usd_per_1m_tokens"]),
             )
             row["long_context_blended_usd_per_1m_tokens"] = decimal_text(long_blend)
+            if quota is not None:
+                long_effective = effective_price(long_blend, quota)
+                row["long_context_effective_usd_per_1m_tokens"] = decimal_text(long_effective)
+            else:
+                row["long_context_effective_usd_per_1m_tokens"] = ""
+        else:
+            row["long_context_effective_usd_per_1m_tokens"] = ""
 
         selected = select_aa_candidate(row["model"], aa_rows)
-        if selected is not None:
+        if selected is not None and quota is not None:
             aa_model, intelligence = selected
-            value = cost_adjusted_intelligence(intelligence, primary_blend)
+            # Use quota-adjusted effective price for scoring.
+            effective = effective_price(primary_blend, quota)
+            value = cost_adjusted_intelligence(intelligence, effective)
             row["artificial_analysis_model"] = aa_model
             row["artificial_analysis_intelligence_index"] = decimal_text(intelligence)
             row["value_score"] = decimal_text(value)
+        elif selected is not None and quota is None:
+            # Quota missing but intelligence exists: leave value blank (cannot score).
+            aa_model, intelligence = selected
+            row["artificial_analysis_model"] = aa_model
+            row["artificial_analysis_intelligence_index"] = decimal_text(intelligence)
+            row["value_score"] = ""
         output.append(row)
     return output
 
