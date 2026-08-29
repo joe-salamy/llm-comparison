@@ -54,6 +54,12 @@ DISPLAY_LABELS = {
     "p95_first_chunk_latency_seconds": "P95 First Chunk Latency (s)",
     "total_response_time_seconds": "Total Response Time (s)",
     "reasoning_time_seconds": "Reasoning Time (s)",
+    "monthly_usage_usd": "Monthly Quota",
+    "monthly_quota_usd": "Monthly Quota",
+    "opencode_go_blended_usd_per_1m_tokens": "Blended Price (USD/1M)",
+    "long_context_blended_usd_per_1m_tokens": "Blended Price >256K (USD/1M)",
+    "opencode_go_effective_usd_per_1m_tokens": "Effective Price",
+    "long_context_effective_usd_per_1m_tokens": "Effective Price >256K",
 }
 
 MAIN_COLUMNS = [
@@ -99,6 +105,8 @@ class Column:
 
 OPENCODE_GO_INTELLIGENCE = "artificial_analysis_intelligence_index"
 OPENCODE_GO_BLEND = "opencode_go_blended_usd_per_1m_tokens"
+OPENCODE_GO_EFFECTIVE = "opencode_go_effective_usd_per_1m_tokens"
+OPENCODE_GO_QUOTA = "monthly_usage_usd"
 OPENCODE_GO_COLUMNS = [
     Column("model", "Model", False),
     Column(OPENCODE_GO_INTELLIGENCE, "Artificial Analysis Intelligence Index", True),
@@ -108,7 +116,9 @@ OPENCODE_GO_COLUMNS = [
     Column("cache_write_usd_per_1m_tokens", "Cached Write", True),
     Column(OPENCODE_GO_BLEND, "Blended Price", True),
     Column("long_context_blended_usd_per_1m_tokens", ">256K Blended Price", True),
-    Column("monthly_usage_usd", "Usage", True),
+    Column(OPENCODE_GO_QUOTA, "Monthly Quota", True),
+    Column(OPENCODE_GO_EFFECTIVE, "Effective Price", True),
+    Column("long_context_effective_usd_per_1m_tokens", ">256K Effective Price", True),
     Column("value_score", "Cost-adjusted intelligence", True),
 ]
 
@@ -175,6 +185,8 @@ def resolve_category(category: str, headers: list[str]) -> str:
 
 
 def is_lower_better(column: str) -> bool:
+    if column in {"monthly_usage_usd", "monthly_quota_usd"}:
+        return False
     return any(marker in column for marker in LOWER_IS_BETTER_MARKERS)
 
 
@@ -317,7 +329,7 @@ def format_value(key: str, value: Any) -> str:
         return f"{parsed:.2f}"
     if key == OPENCODE_GO_INTELLIGENCE:
         return f"{parsed:g}"
-    if key == "monthly_usage_usd":
+    if key in {"monthly_usage_usd", "monthly_quota_usd"}:
         return f"${parsed:g}"
     if key == "cost_per_task":
         return f"${parsed:.2f}"
@@ -332,9 +344,10 @@ def format_value(key: str, value: Any) -> str:
         "long_context_cache_write_usd_per_1m_tokens",
         OPENCODE_GO_BLEND,
         "long_context_blended_usd_per_1m_tokens",
+        OPENCODE_GO_EFFECTIVE,
+        "long_context_effective_usd_per_1m_tokens",
     }:
         return f"${parsed:.6f}".rstrip("0").rstrip(".")
-
     if key == "context_window_tokens":
         return f"{int(parsed):,}"
     if key.endswith("_pct") or key.endswith("_index"):
@@ -409,23 +422,37 @@ def opencode_go_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
                 "OpenCode Go scraped_at must use canonical YYYY-MM-DDTHH:MM:SSZ format"
             )
 
-    graph_categories = [OPENCODE_GO_BLEND, OPENCODE_GO_INTELLIGENCE]
+    graph_categories = [OPENCODE_GO_EFFECTIVE, OPENCODE_GO_INTELLIGENCE]
     prepared: list[dict[str, Any]] = []
     ranked_positions: list[int] = []
     ranked_rows: list[dict[str, Any]] = []
     for position, source in enumerate(rows):
         intelligence = parse_float(source.get(OPENCODE_GO_INTELLIGENCE))
-        blend = parse_float(source.get(OPENCODE_GO_BLEND))
+        effective = parse_float(source.get(OPENCODE_GO_EFFECTIVE))
+        # Fallback for legacy CSVs that lack effective column: compute blended/quota.
+        if effective is None:
+            blended_fallback = parse_float(source.get(OPENCODE_GO_BLEND))
+            quota_fallback = parse_float(
+                source.get(OPENCODE_GO_QUOTA)
+                or source.get("monthly_quota_usd")
+                or source.get("monthly_usage_usd")
+            )
+            if (
+                blended_fallback is not None
+                and quota_fallback is not None
+                and quota_fallback > 0
+            ):
+                effective = blended_fallback / quota_fallback
         score = parse_float(source.get("value_score"))
         row: dict[str, Any] = {
             **source,
             FINAL_SCORE: score,
             "_raw_values": {},
         }
-        if intelligence is not None and blend is not None:
+        if intelligence is not None and effective is not None:
             row["_raw_values"] = {
                 OPENCODE_GO_INTELLIGENCE: intelligence,
-                OPENCODE_GO_BLEND: blend,
+                OPENCODE_GO_EFFECTIVE: effective,
             }
             ranked_positions.append(position)
             ranked_rows.append(row)
@@ -444,8 +471,8 @@ def opencode_go_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
         "rows": json_ready_rows(prepared, OPENCODE_GO_COLUMNS, graph_categories, flags),
         "categories": [
             {
-                "key": OPENCODE_GO_BLEND,
-                "label": "OpenCode Go blended price ($/1M tokens)",
+                "key": OPENCODE_GO_EFFECTIVE,
+                "label": "OpenCode Go effective price (blended ÷ quota)",
                 "lowerIsBetter": True,
             },
             {
@@ -457,7 +484,7 @@ def opencode_go_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
         "graphCategories": graph_categories,
         "scrapedAt": scraped_at,
         "sourceUrl": "https://opencode.ai/docs/go/",
-        "formula": "(7 × cached read + 2 × input + output) ÷ 10",
+        "formula": "((7 × cached read + 2 × input + output) ÷ 10) ÷ monthly quota",
     }
 
 

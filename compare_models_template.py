@@ -727,7 +727,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       <div>
         <h1 id="pageTitle">LLM Comparison</h1>
         <div class="meta-stack">
-          <div class="meta" id="dataFreshness">Data updated: 2026-08-27T18:20:59Z</div>
+          <div class="meta" id="dataFreshness">Data updated: 2026-08-29T00:48:35Z</div>
           <div class="meta" id="summary"></div>
         </div>
       </div>
@@ -852,7 +852,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   </main>
   <script>
     const payload = __PAYLOAD__;
-    const dataUpdated = "2026-08-27T18:20:59Z";
+    const dataUpdated = "2026-08-29T00:48:35Z";
     const displayLabels = {
       model: "Model",
       context_window_tokens: "Context Window",
@@ -890,6 +890,11 @@ HTML_TEMPLATE = r"""<!doctype html>
       p95_first_chunk_latency_seconds: "P95 First Chunk Latency (s)",
       total_response_time_seconds: "Total Response Time (s)",
       reasoning_time_seconds: "Reasoning Time (s)",
+      monthly_usage_usd: "Monthly Quota",
+      opencode_go_blended_usd_per_1m_tokens: "Blended Price",
+      long_context_blended_usd_per_1m_tokens: ">256K Blended Price",
+      opencode_go_effective_usd_per_1m_tokens: "Effective Price",
+      long_context_effective_usd_per_1m_tokens: ">256K Effective Price",
     };
     const isOpenCodeGoView =
       new URLSearchParams(window.location.search).get("view") === "opencode-go";
@@ -905,18 +910,19 @@ HTML_TEMPLATE = r"""<!doctype html>
       document.getElementById("pageTitle").textContent = "OpenCode Go value";
       document.getElementById("aboutTitle").textContent = "About OpenCode Go value";
       document.getElementById("aboutContent").innerHTML = `
-        <p>This view joins <a href="${payload.sourceUrl}" rel="noreferrer">OpenCode Go</a> token pricing and monthly Usage allowances to the <a href="https://artificialanalysis.ai/leaderboards/models" rel="noreferrer">Artificial Analysis</a> Intelligence Index.</p>
+        <p>This view joins <a href="${payload.sourceUrl}" rel="noreferrer">OpenCode Go</a> token pricing and monthly quota allowances to the <a href="https://artificialanalysis.ai/leaderboards/models" rel="noreferrer">Artificial Analysis</a> Intelligence Index.</p>
         <ul>
-          <li>Cost-adjusted intelligence = Intelligence − 10 × log₁₀(blended price ÷ $1 per 1M tokens).</li>
-          <li>A 10-point Intelligence gain offsets a 10× higher blended price.</li>
-          <li>Blended price formula: <strong>${payload.formula}</strong>.</li>
-          <li>Usage and cached-write prices are displayed but excluded from the score.</li>
+          <li>Cost-adjusted intelligence = Intelligence − 10 × log₁₀(effective price), where effective price = blended price ÷ monthly quota.</li>
+          <li>A 10-point Intelligence gain offsets a 10× higher effective price.</li>
+          <li>Blended price formula: (7 × cached read + 2 × input + output) ÷ 10; effective price = <strong>${payload.formula}</strong>.</li>
+          <li>Monthly quota and blended prices are displayed; effective price (blended ÷ quota) drives the score. Cached-write prices are displayed but excluded from the score.</li>
           <li>Models without an Intelligence Index remain visible as Unranked.</li>
         </ul>`;
     }
     const goValueKey = "value_score";
     const goIntelligenceKey = "artificial_analysis_intelligence_index";
     const goBlendKey = "opencode_go_blended_usd_per_1m_tokens";
+    const goEffectiveKey = "opencode_go_effective_usd_per_1m_tokens";
     const embeddedRows = payload.rows.slice();
     let sourceRows = [];
     let availableCategories = (payload.availableCategories || payload.categories).slice();
@@ -1011,9 +1017,9 @@ HTML_TEMPLATE = r"""<!doctype html>
     }
 
     function isLowerBetter(key) {
+      if (key === "monthly_usage_usd" || key === "monthly_quota_usd") return false;
       return lowerIsBetterMarkers.some(marker => key.includes(marker));
     }
-
     function labelFor(key) {
       return displayLabels[key] || key.replaceAll("_", " ");
     }
@@ -1086,7 +1092,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       const general = () => String(parsed);
       if (key === goValueKey) return parsed.toFixed(2);
       if (key === goIntelligenceKey) return general();
-      if (key === "monthly_usage_usd") return `$${general()}`;
+      if (key === "monthly_usage_usd" || key === "monthly_quota_usd") return `$${general()}`;
       if (key === "cost_per_task") return `$${parsed.toFixed(2)}`;
       if ([
         "input_price_usd_per_1m_tokens",
@@ -1099,6 +1105,8 @@ HTML_TEMPLATE = r"""<!doctype html>
         "long_context_cache_write_usd_per_1m_tokens",
         goBlendKey,
         "long_context_blended_usd_per_1m_tokens",
+        goEffectiveKey,
+        "long_context_effective_usd_per_1m_tokens",
       ].includes(key)) {
         return `$${parsed.toFixed(6).replace(/\.?0+$/, "")}`;
       }
@@ -1488,11 +1496,18 @@ HTML_TEMPLATE = r"""<!doctype html>
       const scrapedAt = scrapedValues[0];
       const loadedRows = csvRows.map(raw => {
         const intelligence = parseNumber(raw[goIntelligenceKey]);
-        const blend = parseNumber(raw[goBlendKey]);
+        let effective = parseNumber(raw[goEffectiveKey]);
+        if (effective === null) {
+          const blendFallback = parseNumber(raw[goBlendKey]);
+          const quotaFallback = parseNumber(raw.monthly_usage_usd ?? raw.monthly_quota_usd);
+          if (blendFallback !== null && quotaFallback !== null && quotaFallback > 0) {
+            effective = blendFallback / quotaFallback;
+          }
+        }
         const score = parseNumber(raw[goValueKey]);
-        const graph = intelligence === null || blend === null
+        const graph = intelligence === null || effective === null
           ? {}
-          : { [goIntelligenceKey]: intelligence, [goBlendKey]: blend };
+          : { [goIntelligenceKey]: intelligence, [goEffectiveKey]: effective };
         const cells = Object.fromEntries(payload.columns.map(column => {
           const rawValue = raw[column.key];
           const numericValue = parseNumber(rawValue);
@@ -1511,10 +1526,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       });
       const plottedRows = loadedRows.filter(row =>
         Number.isFinite(row.graph[goIntelligenceKey]) &&
-        Number.isFinite(row.graph[goBlendKey])
+        Number.isFinite(row.graph[goEffectiveKey])
       );
-      const flags = computePareto(plottedRows, payload.graphCategories);
-      plottedRows.forEach((row, index) => { row.pareto = flags[index]; });
       loadedRows.sort((left, right) => {
         if (left.score === null) return right.score === null ? 0 : 1;
         if (right.score === null) return -1;
