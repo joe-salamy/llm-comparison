@@ -727,7 +727,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       <div>
         <h1 id="pageTitle">LLM Comparison</h1>
         <div class="meta-stack">
-          <div class="meta" id="dataFreshness">Data updated: 2026-09-05T16:13:51Z</div>
+          <div class="meta" id="dataFreshness">Data updated: 2026-09-06T19:53:10Z</div>
           <div class="meta" id="summary"></div>
         </div>
       </div>
@@ -852,7 +852,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   </main>
   <script>
     const payload = __PAYLOAD__;
-    const dataUpdated = "2026-09-05T16:13:51Z";
+    const dataUpdated = "2026-09-06T19:53:10Z";
     const displayLabels = {
       model: "Model",
       context_window_tokens: "Context Window",
@@ -943,8 +943,8 @@ HTML_TEMPLATE = r"""<!doctype html>
       "final_score",
     ];
     const coreCategoryKeys = [
-      "artificial_analysis_intelligence_index",
       "cost_per_task",
+      "artificial_analysis_intelligence_index",
       "median_tokens_per_second",
       "first_chunk_latency_seconds",
       "total_response_time_seconds",
@@ -1528,6 +1528,10 @@ HTML_TEMPLATE = r"""<!doctype html>
         Number.isFinite(row.graph[goIntelligenceKey]) &&
         Number.isFinite(row.graph[goEffectiveKey])
       );
+      const goPareto = computePareto(plottedRows, [goEffectiveKey, goIntelligenceKey]);
+      for (const [rowIndex, row] of plottedRows.entries()) {
+        row.pareto = goPareto[rowIndex];
+      }
       loadedRows.sort((left, right) => {
         if (left.score === null) return right.score === null ? 0 : 1;
         if (right.score === null) return -1;
