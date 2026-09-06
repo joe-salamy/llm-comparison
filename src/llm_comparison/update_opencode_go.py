@@ -63,6 +63,7 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
     "MiniMax M3": ("MiniMax-M3",),
     "MiniMax M2.7": ("MiniMax-M2.7",),
     "MiniMax M2.5": (),
+    "Muse Spark 1.3 Contributor": ("Muse Spark 1.3 (xhigh)",),
     "Muse Spark 1.2 Contributor": ("Muse Spark 1.2 (xhigh)",),
     "Qwen3.8 Max": ("Qwen3.8 Max",),
     "Qwen3.7 Max": ("Qwen3.7 Max",),
