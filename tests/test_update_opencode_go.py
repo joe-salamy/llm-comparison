@@ -594,6 +594,28 @@ def test_snapshot_selector_rejects_wrong_ambiguous_empty_and_ragged_tables() -> 
         updater.select_pricing_snapshot([{"headers": HEADERS, "rows": [["A", "$1"]]}])
 
 
+def test_monthly_limit_header_alias_matches_usage() -> None:
+    alias_headers = [
+        "Model",
+        "Input",
+        "Output",
+        "Cached Read",
+        "Cached Write",
+        "Monthly limit",
+    ]
+    headers, rows = updater.select_pricing_snapshot(
+        [{"headers": alias_headers, "rows": SOURCE_ROWS}]
+    )
+    assert headers == alias_headers
+    assert updater.parse_source_rows(headers, rows) == updater.parse_source_rows(
+        HEADERS, SOURCE_ROWS
+    )
+    assert (
+        updater.build_output_rows(headers, rows, AA_ROWS, scraped_at=SCRAPED_AT)
+        == output_rows()
+    )
+
+
 def test_failed_scrape_preserves_existing_output(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:

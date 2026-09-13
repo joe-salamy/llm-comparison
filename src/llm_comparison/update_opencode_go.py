@@ -20,6 +20,7 @@ DEFAULT_CSV = PROJECT_ROOT / "data/opencode_go.csv"
 DEFAULT_AA_CSV = PROJECT_ROOT / "data/results.csv"
 
 SOURCE_HEADERS = ["Model", "Input", "Output", "Cached Read", "Cached Write", "Usage"]
+USAGE_HEADER_ALIASES = frozenset({"Usage", "Monthly limit"})
 CSV_COLUMNS = [
     "model",
     "input_price_usd_per_1m_tokens",
@@ -147,13 +148,23 @@ def normalize_text(value: str) -> str:
     return " ".join(value.strip().split())
 
 
+def is_pricing_headers(normalized_headers: list[str]) -> bool:
+    return (
+        len(normalized_headers) == len(SOURCE_HEADERS)
+        and normalized_headers[:5] == SOURCE_HEADERS[:5]
+        and normalized_headers[5] in USAGE_HEADER_ALIASES
+    )
+
+
 def select_pricing_snapshot(
     snapshots: list[TableSnapshot],
 ) -> tuple[list[str], list[list[str]]]:
     matches = [
         snapshot
         for snapshot in snapshots
-        if [normalize_text(header) for header in snapshot["headers"]] == SOURCE_HEADERS
+        if is_pricing_headers(
+            [normalize_text(header) for header in snapshot["headers"]]
+        )
     ]
     if not matches:
         discovered = [
@@ -202,7 +213,7 @@ def parse_currency(
 
 def parse_source_rows(headers: list[str], rows: list[list[str]]) -> list[PriceRow]:
     normalized_headers = [normalize_text(header) for header in headers]
-    if normalized_headers != SOURCE_HEADERS:
+    if not is_pricing_headers(normalized_headers):
         raise RuntimeError(
             "OpenCode Go pricing table headers did not match the required columns"
         )
