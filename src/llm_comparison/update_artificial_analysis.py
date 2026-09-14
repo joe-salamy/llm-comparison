@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import re
 import sys
 import time
@@ -165,22 +166,73 @@ def extract_table(snapshot: TableSnapshot) -> tuple[list[str], list[list[str]]]:
     return retained_headers, retained_rows
 
 
+async def _locator_visible(locator: Any) -> bool:
+    try:
+        return bool(await locator.is_visible())
+    except Exception:
+        return False
+
+
+async def _leaf_header_count(page: Any) -> int:
+    try:
+        table = page.locator("main table").first
+        leaf_cells = table.locator("thead tr").last.locator("th, td")
+        return int(await leaf_cells.count())
+    except Exception:
+        return 0
+
+
 async def expand_columns(page: Any, timeout_ms: int) -> None:
-    expand_button = page.get_by_role("button", name=re.compile("Expand columns", re.I))
-    collapse_button = page.get_by_role(
+    expand_by_name = page.get_by_role("button", name=re.compile("Expand columns", re.I))
+    collapse_by_name = page.get_by_role(
         "button", name=re.compile("Collapse columns", re.I)
     )
+    # Narrow viewports hide the label span, leaving an icon-only button with
+    # an empty accessible name that the role locators above cannot match.
+    expand_by_icon = page.locator("button:has(svg.lucide-arrow-right-from-line)")
+    collapse_by_icon = page.locator("button:has(svg.lucide-arrow-left-from-line)")
     deadline = time.monotonic() + (timeout_ms / 1000)
-
+    baseline = await _leaf_header_count(page)
     while time.monotonic() < deadline:
-        if await expand_button.first.is_visible():
-            await expand_button.first.click(timeout=timeout_ms)
-            await collapse_button.first.wait_for(state="visible", timeout=timeout_ms)
+        remaining_ms = int((deadline - time.monotonic()) * 1000)
+        if remaining_ms <= 0:
+            break
+        if await _locator_visible(collapse_by_name.first) or await _locator_visible(
+            collapse_by_icon.first
+        ):
             return
-        if await collapse_button.first.is_visible():
+        current = await _leaf_header_count(page)
+        if baseline > 0 and current > baseline:
             return
-        await page.wait_for_timeout(250)
-
+        if baseline == 0 and current > 0:
+            baseline = current
+        if await _locator_visible(expand_by_name.first):
+            expand_target = expand_by_name.first
+        elif await _locator_visible(expand_by_icon.first):
+            expand_target = expand_by_icon.first
+        else:
+            await page.wait_for_timeout(min(250, remaining_ms))
+            continue
+        # The button renders before React hydration attaches its handler, so a
+        # single click can land without expanding. Click, then poll for the
+        # transition and retry until the deadline instead of waiting once.
+        with contextlib.suppress(Exception):
+            await expand_target.scroll_into_view_if_needed(timeout=remaining_ms)
+        with contextlib.suppress(Exception):
+            await expand_target.click(timeout=remaining_ms)
+        settle_until = min(deadline, time.monotonic() + 5)
+        while time.monotonic() < settle_until:
+            if await _locator_visible(collapse_by_name.first) or await _locator_visible(
+                collapse_by_icon.first
+            ):
+                return
+            expanded = await _leaf_header_count(page)
+            if baseline > 0 and expanded > baseline:
+                return
+            settle_remaining_ms = int((deadline - time.monotonic()) * 1000)
+            if settle_remaining_ms <= 0:
+                break
+            await page.wait_for_timeout(min(250, settle_remaining_ms))
     raise RuntimeError("Could not find Artificial Analysis column expansion control")
 
 

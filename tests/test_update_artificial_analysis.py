@@ -251,6 +251,136 @@ def test_async_main_defaults_missing_uploaded_date_to_current_utc_time(
     ]
 
 
+class _FakeExpanderLocator:
+    def __init__(self, visible: bool = False) -> None:
+        self.visible = visible
+        self.clicks = 0
+
+    @property
+    def first(self) -> _FakeExpanderLocator:
+        return self
+
+    async def is_visible(self) -> bool:
+        return self.visible
+
+    async def scroll_into_view_if_needed(self, timeout: int) -> None:
+        return None
+
+    async def click(self, timeout: int) -> None:
+        self.clicks += 1
+
+
+class _FakeHeaderCells:
+    def __init__(self, counts: list[int]) -> None:
+        self.counts = counts
+
+    async def count(self) -> int:
+        if len(self.counts) > 1:
+            return self.counts.pop(0)
+        return self.counts[0]
+
+
+class _FakeHeaderRow:
+    def __init__(self, counts: list[int]) -> None:
+        self.counts = counts
+
+    def locator(self, selector: str) -> _FakeHeaderCells:
+        assert selector == "th, td"
+        return _FakeHeaderCells(self.counts)
+
+
+class _FakeExpanderTable:
+    def __init__(self, counts: list[int]) -> None:
+        self.counts = counts
+
+    def locator(self, selector: str) -> _FakeHeaderRow:
+        assert selector == "thead tr"
+        return _FakeHeaderRow(self.counts)
+
+    @property
+    def last(self) -> _FakeHeaderRow:
+        return _FakeHeaderRow(self.counts)
+
+
+class _FakeExpanderPage:
+    def __init__(
+        self,
+        counts: list[int],
+        *,
+        clicks_to_expand: int = 0,
+        name_visible: bool = True,
+    ) -> None:
+        self.counts = counts
+        self.clicks_to_expand = clicks_to_expand
+        self.clicks = 0
+        self.expand_by_name = _FakeExpanderLocator(
+            visible=name_visible and clicks_to_expand >= 0
+        )
+        self.expand_by_icon = _FakeExpanderLocator(
+            visible=not name_visible and clicks_to_expand >= 0
+        )
+        self.collapse_by_name = _FakeExpanderLocator()
+        self.collapse_by_icon = _FakeExpanderLocator()
+        self._role_calls = 0
+
+    def get_by_role(self, role: str, name: object) -> _FakeExpanderLocator:
+        assert role == "button"
+        self._role_calls += 1
+        return self.expand_by_name if self._role_calls == 1 else self.collapse_by_name
+
+    def locator(self, selector: str) -> object:
+        if selector == "button:has(svg.lucide-arrow-right-from-line)":
+            return self.expand_by_icon
+        if selector == "button:has(svg.lucide-arrow-left-from-line)":
+            return self.collapse_by_icon
+        assert selector == "main table"
+        return _FakeExpanderTable(self.counts)
+
+    async def wait_for_timeout(self, timeout_ms: int) -> None:
+        clicks = self.expand_by_name.clicks + self.expand_by_icon.clicks
+        if clicks > self.clicks and clicks >= self.clicks_to_expand:
+            self.clicks = clicks
+            self.collapse_by_name.visible = True
+
+
+def test_expand_columns_retries_dropped_click_until_collapse_visible() -> None:
+    page = _FakeExpanderPage([9, 9], clicks_to_expand=2)
+
+    asyncio.run(updater.expand_columns(page, 15_000))
+
+    assert page.expand_by_name.clicks == 2
+    assert page.collapse_by_name.visible is True
+
+
+def test_expand_columns_uses_icon_button_without_accessible_name() -> None:
+    page = _FakeExpanderPage([9, 9], clicks_to_expand=1, name_visible=False)
+
+    asyncio.run(updater.expand_columns(page, 5_000))
+
+    assert page.expand_by_name.clicks == 0
+    assert page.expand_by_icon.clicks == 1
+    assert page.collapse_by_name.visible is True
+
+
+def test_expand_columns_returns_when_already_expanded() -> None:
+    page = _FakeExpanderPage([43, 43])
+    page.collapse_by_name.visible = True
+
+    asyncio.run(updater.expand_columns(page, 5_000))
+
+    assert page.expand_by_name.clicks == 0
+    assert page.expand_by_icon.clicks == 0
+
+
+def test_expand_columns_times_out_without_transition() -> None:
+    page = _FakeExpanderPage([9, 9], clicks_to_expand=10_000)
+
+    with pytest.raises(RuntimeError, match="column expansion control"):
+        asyncio.run(updater.expand_columns(page, 50))
+
+    assert page.expand_by_name.clicks >= 1
+
+
 def test_default_paths_resolve_from_project_root() -> None:
     args = updater.parse_args([])
 
@@ -259,8 +389,6 @@ def test_default_paths_resolve_from_project_root() -> None:
     assert args.template == (
         updater.PROJECT_ROOT / "src/llm_comparison/compare_models_template.py"
     )
-
-
 
 
 @pytest.mark.parametrize("option", ["--skip-publish", "--publish-script"])
