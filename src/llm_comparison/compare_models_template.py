@@ -610,6 +610,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       width: 100%;
       height: 560px;
       display: block;
+      touch-action: none;
       border: 1px solid var(--line);
       border-radius: 6px;
       background: var(--chart-bg);
@@ -1350,6 +1351,34 @@ HTML_TEMPLATE = r"""<!doctype html>
     function trackChartListener(target, type, handler, options) {
       target.addEventListener(type, handler, options);
       chartDisposers.push(() => target.removeEventListener(type, handler, options));
+    }
+
+    function wheelZoomFactor(event) {
+      let deltaY = event.deltaY;
+      if (event.deltaMode === 1) deltaY *= 16;
+      if (event.ctrlKey || event.metaKey) {
+        return Math.max(0.5, Math.min(2, Math.exp(-deltaY * 0.01)));
+      }
+      return deltaY < 0 ? 1.08 : 0.92;
+    }
+
+    function trackCanvasGestures(canvas, onPinch) {
+      let gestureScale = 0;
+      trackChartListener(canvas, "gesturestart", event => {
+        event.preventDefault();
+        gestureScale = event.scale;
+      }, { passive: false });
+      trackChartListener(canvas, "gesturechange", event => {
+        event.preventDefault();
+        if (gestureScale > 0 && event.scale > 0) {
+          onPinch(event.scale / gestureScale, event);
+          gestureScale = event.scale;
+        }
+      }, { passive: false });
+      trackChartListener(canvas, "gestureend", event => {
+        event.preventDefault();
+        gestureScale = 0;
+      }, { passive: false });
     }
 
     function applySelection({ syncUrl = false } = {}) {
@@ -2672,11 +2701,21 @@ HTML_TEMPLATE = r"""<!doctype html>
         event.preventDefault();
         const rect = canvas.getBoundingClientRect();
         const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-        zoom2DAt(point, event.deltaY < 0 ? 1.08 : 0.92, rect.width, rect.height);
+        zoom2DAt(point, wheelZoomFactor(event), rect.width, rect.height);
         hover = null;
         tooltip.style.display = "none";
         render();
       }, { passive: false });
+      trackCanvasGestures(canvas, (factor, gestureEvent) => {
+        const rect = canvas.getBoundingClientRect();
+        const point = Number.isFinite(gestureEvent?.clientX) && Number.isFinite(gestureEvent?.clientY)
+          ? { x: gestureEvent.clientX - rect.left, y: gestureEvent.clientY - rect.top }
+          : { x: rect.width / 2, y: rect.height / 2 };
+        zoom2DAt(point, factor, rect.width, rect.height);
+        hover = null;
+        tooltip.style.display = "none";
+        render();
+      });
       trackChartListener(canvas, "touchstart", event => {
         markTouchInteraction();
         if (event.touches.length === 1) {
@@ -3124,10 +3163,15 @@ HTML_TEMPLATE = r"""<!doctype html>
       });
       trackChartListener(canvas, "wheel", event => {
         event.preventDefault();
-        zoom *= event.deltaY < 0 ? 1.08 : 0.92;
+        zoom *= wheelZoomFactor(event);
         zoom = Math.max(0.55, Math.min(8, zoom));
         render();
       }, { passive: false });
+      trackCanvasGestures(canvas, factor => {
+        zoom *= factor;
+        zoom = Math.max(0.55, Math.min(8, zoom));
+        render();
+      });
       trackChartListener(canvas, "touchstart", event => {
         markTouchInteraction();
         if (event.touches.length === 1) {
