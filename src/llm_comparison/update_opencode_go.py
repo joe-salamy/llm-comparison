@@ -106,6 +106,8 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
         "DeepSeek V4 Flash (high)",
         "DeepSeek V4 Flash",
     ),
+    "DeepSeek V4.1 Flash (Off-Peak)": ("DeepSeek V4.1 Flash (max)",),
+    "DeepSeek V4.1 Flash (Peak)": ("DeepSeek V4.1 Flash (max)",),
     "DeepSeek V4 Flash Vision Exp (Off-Peak)": (
         "DeepSeek V4 Flash 0731 (max)",
         "DeepSeek V4 Flash (max)",
@@ -211,6 +213,39 @@ def parse_currency(
     return parsed
 
 
+PROMO_USAGE_MARKERS = re.compile(r"(?i)\bends\b|\bpromo\b|[·•]|\dx\b")
+
+
+def parse_usage(value: str, *, source_label: str) -> Decimal | None:
+    """Parse the Usage quota, tolerating promo annotations.
+
+    Promo cells render as "<del>$15</del> <strong>$60</strong> 4x · Ends ...";
+    the last price is the current quota. A glued "<dollar><digits>x" token
+    (textContent scraping without a <br> separator) is ambiguous, so it fails
+    loudly instead of writing a wrong quota.
+    """
+    normalized = normalize_text(value)
+    if normalized == "-":
+        return None
+    if re.fullmatch(r"\$(?:\d+(?:\.\d*)?|\.\d+)", normalized):
+        return Decimal(normalized[1:])
+    if re.search(r"\$\d[\d.]*x\b", normalized):
+        raise RuntimeError(
+            f"Ambiguous OpenCode Go Usage for {source_label!r}: {value!r}"
+        )
+    amounts = re.findall(r"\$(\d+(?:\.\d*)?|\.\d+)\b", normalized)
+    if amounts and PROMO_USAGE_MARKERS.search(normalized):
+        current = amounts[-1]
+        print(
+            f"warning: OpenCode Go Usage for {source_label!r} carries promo "
+            f"text; using current quota ${current} from {value!r}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return Decimal(current)
+    raise RuntimeError(f"Invalid OpenCode Go Usage for {source_label!r}: {value!r}")
+
+
 def parse_source_rows(headers: list[str], rows: list[list[str]]) -> list[PriceRow]:
     normalized_headers = [normalize_text(header) for header in headers]
     if not is_pricing_headers(normalized_headers):
@@ -287,14 +322,7 @@ def parse_source_rows(headers: list[str], rows: list[list[str]]) -> list[PriceRo
         cache_write_price = parse_currency(
             values[4], field="Cached Write", source_label=source_label, allow_blank=True
         )
-        if normalize_text(values[5]) == "-":
-            monthly_usage = None
-        else:
-            parsed = parse_currency(
-                values[5], field="Usage", source_label=source_label
-            )
-            assert parsed is not None
-            monthly_usage = parsed
+        monthly_usage = parse_usage(values[5], source_label=source_label)
         parsed_rows.append(
             {
                 "source_label": source_label,
@@ -714,7 +742,9 @@ async def scrape_table(
                         cell => cell.textContent || ''
                       ),
                       rows: Array.from(table.querySelectorAll('tbody tr'), row =>
-                        Array.from(row.cells, cell => cell.textContent || '')),
+                        // innerText splits <br> promo notes onto their own line so the
+                        // quota parser sees "$60" and "4x" instead of a glued "$604x".
+                        Array.from(row.cells, cell => cell.innerText || '')),
                     }))
                     """
                 ),

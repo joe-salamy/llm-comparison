@@ -642,3 +642,69 @@ def test_failed_scrape_preserves_existing_output(
     with pytest.raises(RuntimeError, match="source unavailable"):
         asyncio.run(updater.async_main(args))
     assert output.read_text(encoding="utf-8") == "old data\n"
+
+
+def test_promo_usage_cell_uses_current_quota(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert updater.parse_usage("$15", source_label="M") == Decimal("15")
+    assert updater.parse_usage("-", source_label="M") is None
+    assert updater.parse_usage(
+        "$15 $60 4x · Ends Sep 20",
+        source_label="DeepSeek V4.1 Flash (Off-Peak)",
+    ) == Decimal("60")
+    assert updater.parse_usage(
+        "$60 4x · Ends Sep 20", source_label="DeepSeek V4.1 Flash (Peak)"
+    ) == Decimal("60")
+    assert "promo" in capsys.readouterr().err
+
+
+def test_glued_promo_usage_cell_fails_loudly() -> None:
+    with pytest.raises(RuntimeError, match="Ambiguous OpenCode Go Usage"):
+        updater.parse_usage(
+            "$15 $604x · Ends Sep 20",
+            source_label="DeepSeek V4.1 Flash (Off-Peak)",
+        )
+    with pytest.raises(RuntimeError, match="Invalid OpenCode Go Usage"):
+        updater.parse_usage("$abc", source_label="M")
+
+
+def test_promo_usage_rows_join_and_score() -> None:
+    source = [
+        [
+            "DeepSeek V4.1 Flash (Off-Peak)",
+            "$0.15",
+            "$0.60",
+            "$0.003",
+            "-",
+            "$15 $60 4x · Ends Sep 20",
+        ],
+        [
+            "DeepSeek V4.1 Flash (Peak)",
+            "$0.30",
+            "$1.20",
+            "$0.006",
+            "-",
+            "$15 $60 4x · Ends Sep 20",
+        ],
+    ]
+    aa_rows = [
+        {
+            "model": "DeepSeek V4.1 Flash (max)",
+            "artificial_analysis_intelligence_index": "52",
+        }
+    ]
+    rows = updater.build_output_rows(
+        HEADERS, source, aa_rows, scraped_at=SCRAPED_AT
+    )
+    assert len(rows) == 2
+    off_peak = by_model(rows, "DeepSeek V4.1 Flash (Off-Peak)")
+    assert off_peak["monthly_usage_usd"] == "60"
+    assert off_peak["artificial_analysis_model"] == "DeepSeek V4.1 Flash (max)"
+    assert off_peak["artificial_analysis_intelligence_index"] == "52"
+    assert Decimal(
+        off_peak["opencode_go_effective_usd_per_1m_tokens"]
+    ) == Decimal(off_peak["opencode_go_blended_usd_per_1m_tokens"]) / Decimal(
+        "60"
+    )
+    assert Decimal(off_peak["value_score"]) > 0
