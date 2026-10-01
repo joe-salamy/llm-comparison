@@ -587,11 +587,36 @@ def test_snapshot_selector_rejects_wrong_ambiguous_empty_and_ragged_tables() -> 
             [{"headers": ["Model", "Other"], "rows": [["A", "B"]]}]
         )
     with pytest.raises(RuntimeError, match="multiple"):
-        updater.select_pricing_snapshot([valid, valid])
+        updater.select_pricing_snapshot([valid, dict(valid)])
     with pytest.raises(RuntimeError, match="no data rows"):
         updater.select_pricing_snapshot([{"headers": HEADERS, "rows": []}])
     with pytest.raises(RuntimeError, match="expected 6"):
         updater.select_pricing_snapshot([{"headers": HEADERS, "rows": [["A", "$1"]]}])
+
+def test_snapshot_selector_prefers_go_plan_panel() -> None:
+    go_headers = [
+        "Model",
+        "Input",
+        "Output",
+        "Cached Read",
+        "Cached Write",
+        "Monthly limit",
+    ]
+    go: updater.TableSnapshot = {
+        "headers": go_headers,
+        "rows": [SOURCE_ROWS[0]],
+        "panel": "tab-panel-0",
+    }
+    plus: updater.TableSnapshot = {
+        "headers": go_headers,
+        "rows": [SOURCE_ROWS[1]],
+        "panel": "tab-panel-1",
+    }
+    headers, rows = updater.select_pricing_snapshot([plus, go])
+    assert headers == go_headers
+    assert rows == [SOURCE_ROWS[0]]
+    with pytest.raises(RuntimeError, match="multiple"):
+        updater.select_pricing_snapshot([go, dict(go)])
 
 
 def test_monthly_limit_header_alias_matches_usage() -> None:
@@ -614,6 +639,31 @@ def test_monthly_limit_header_alias_matches_usage() -> None:
         updater.build_output_rows(headers, rows, AA_ROWS, scraped_at=SCRAPED_AT)
         == output_rows()
     )
+
+
+def test_free_and_unlimited_cells_parse_as_zero_quota_blank() -> None:
+    assert updater.parse_currency("Free", field="Input", source_label="M") == Decimal(0)
+    assert updater.parse_usage("Unlimited", source_label="M") is None
+    assert updater.parse_usage("Unlimited\nlimited time", source_label="M") is None
+    headers = [
+        "Model",
+        "Input",
+        "Output",
+        "Cached Read",
+        "Cached Write",
+        "Monthly limit",
+    ]
+    rows = updater.build_output_rows(
+        headers,
+        [["Space Bunny Free", "Free", "Free", "Free", "-", "Unlimited\nlimited time"]],
+        AA_ROWS,
+        scraped_at=SCRAPED_AT,
+    )
+    assert rows[0]["input_price_usd_per_1m_tokens"] == "0"
+    assert rows[0]["monthly_usage_usd"] == ""
+    assert rows[0]["opencode_go_blended_usd_per_1m_tokens"] == "0"
+    assert rows[0]["opencode_go_effective_usd_per_1m_tokens"] == ""
+    assert rows[0]["value_score"] == ""
 
 
 def test_failed_scrape_preserves_existing_output(

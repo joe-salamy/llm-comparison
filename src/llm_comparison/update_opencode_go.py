@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import NotRequired, TypedDict, cast
 
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -44,10 +44,20 @@ CSV_COLUMNS = [
 ]
 
 AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
+    "Grok 4.7": ("Grok 4.7 (high)", "Grok 4.7 (xhigh)"),
+    "Grok 4.6": ("Grok 4.6 (high)", "Grok 4.6 (xhigh)"),
     "Grok 4.5": ("Grok 4.5 (high)",),
     "GLM-5.3": ("GLM-5.3 (max)",),
     "GLM-5.2": ("GLM-5.2 (max)", "GLM-5.2"),
     "GLM-5.1": ("GLM-5.1",),
+    "GPT 6 Luna": (
+        "GPT-6 Luna (max)",
+        "GPT-6 Luna (xhigh)",
+        "GPT-6 Luna (high)",
+        "GPT-6 Luna (medium)",
+        "GPT-6 Luna (low)",
+        "GPT-6 Luna (Non-reasoning)",
+    ),
     "GPT 5.6 Luna": (
         "GPT-5.6 Luna (max)",
         "GPT-5.6 Luna (xhigh)",
@@ -66,7 +76,8 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
     "MiniMax M2.5": (),
     "Muse Spark 1.3 Contributor": ("Muse Spark 1.3 (xhigh)",),
     "Muse Spark 1.2 Contributor": ("Muse Spark 1.2 (xhigh)",),
-    "Qwen3.8 Max": ("Qwen3.8 Max",),
+    "Qwen3.8 Max": ("Qwen3.8 Max (0902)", "Qwen3.8 Max"),
+    "Qwen3.8 Flash": ("Qwen3.8-Flash-Next",),
     "Qwen3.7 Max": ("Qwen3.7 Max",),
     "Qwen3.7 Plus": ("Qwen3.7 Plus",),
     "Qwen3.6 Plus": ("Qwen3.6 Plus",),
@@ -109,18 +120,22 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
     "DeepSeek V4.1 Flash (Off-Peak)": ("DeepSeek V4.1 Flash (max)",),
     "DeepSeek V4.1 Flash (Peak)": ("DeepSeek V4.1 Flash (max)",),
     "DeepSeek V4 Flash Vision Exp (Off-Peak)": (
+        "DeepSeek V4 Flash Vision (max)",
         "DeepSeek V4 Flash 0731 (max)",
         "DeepSeek V4 Flash (max)",
         "DeepSeek V4 Flash (high)",
         "DeepSeek V4 Flash",
     ),
     "DeepSeek V4 Flash Vision Exp (Peak)": (
+        "DeepSeek V4 Flash Vision (max)",
         "DeepSeek V4 Flash 0731 (max)",
         "DeepSeek V4 Flash (max)",
         "DeepSeek V4 Flash (high)",
         "DeepSeek V4 Flash",
     ),
     "Hy3": ("Hy3",),
+    "LongCat 2.5 Preview Free": (),
+    "Space Bunny Free": (),
     "Ox Alpha Free": (),
 }
 
@@ -144,6 +159,9 @@ class PriceRow(TypedDict):
 class TableSnapshot(TypedDict):
     headers: list[str]
     rows: list[list[str]]
+    panel: NotRequired[str | None]
+
+GO_PLAN_PANEL_ID = "tab-panel-0"
 
 
 def normalize_text(value: str) -> str:
@@ -177,7 +195,17 @@ def select_pricing_snapshot(
             f"Could not find the OpenCode Go pricing table; found headers: {discovered}"
         )
     if len(matches) != 1:
-        raise RuntimeError("Found multiple OpenCode Go pricing tables")
+        # The page now renders Go and Go Plus quota tables side by side in
+        # tab panels; token prices match, so pin the Go plan panel.
+        panel_matches = [
+            snapshot
+            for snapshot in matches
+            if snapshot.get("panel") == GO_PLAN_PANEL_ID
+        ]
+        if len(panel_matches) == 1:
+            matches = panel_matches
+        else:
+            raise RuntimeError("Found multiple OpenCode Go pricing tables")
     match = matches[0]
     if not match["rows"]:
         raise RuntimeError("OpenCode Go pricing table has no data rows")
@@ -196,6 +224,8 @@ def parse_currency(
     normalized = normalize_text(value)
     if allow_blank and normalized == "-":
         return None
+    if normalized.lower() == "free":
+        return Decimal(0)
     if not re.fullmatch(r"\$(?:\d+(?:\.\d*)?|\.\d+)", normalized):
         raise RuntimeError(
             f"Invalid OpenCode Go {field} for {source_label!r}: {value!r}"
@@ -226,6 +256,8 @@ def parse_usage(value: str, *, source_label: str) -> Decimal | None:
     """
     normalized = normalize_text(value)
     if normalized == "-":
+        return None
+    if normalized.lower().startswith("unlimited"):
         return None
     if re.fullmatch(r"\$(?:\d+(?:\.\d*)?|\.\d+)", normalized):
         return Decimal(normalized[1:])
@@ -745,6 +777,7 @@ async def scrape_table(
                         // innerText splits <br> promo notes onto their own line so the
                         // quota parser sees "$60" and "4x" instead of a glued "$604x".
                         Array.from(row.cells, cell => cell.innerText || '')),
+                      panel: table.closest('[role=tabpanel]')?.id || null,
                     }))
                     """
                 ),
