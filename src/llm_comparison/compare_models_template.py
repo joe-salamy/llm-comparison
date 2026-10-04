@@ -457,6 +457,11 @@ HTML_TEMPLATE = r"""<!doctype html>
       width: 100%;
       overflow: visible;
     }
+    .chart-hint {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
     .chart-wrap:fullscreen {
       width: 100vw;
       height: 100vh;
@@ -794,6 +799,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         </div>
         <div class="zoom-indicator" id="zoomIndicator" aria-live="polite" hidden>1.00x</div>
       </div>
+      <div class="chart-hint" id="chartHint">Scroll to move · Pinch or Ctrl+scroll to zoom · Drag to explore · Double-click to reset</div>
       <div class="tooltip" id="tooltip"></div>
     </section>
     <section class="table-section" aria-labelledby="resultsTitle">
@@ -835,6 +841,7 @@ HTML_TEMPLATE = r"""<!doctype html>
         </div>
         <div class="zoom-indicator" id="paretoZoomIndicator" aria-live="polite">1.00x</div>
       </div>
+      <div class="chart-hint" id="paretoChartHint">Scroll to move · Pinch or Ctrl+scroll to zoom · Drag to explore · Double-click to reset</div>
       <div class="tooltip" id="paretoTooltip"></div>
     </section>
     <section class="info-wrap" aria-labelledby="aboutTitle">
@@ -1360,6 +1367,20 @@ HTML_TEMPLATE = r"""<!doctype html>
         return Math.max(0.5, Math.min(2, Math.exp(-deltaY * 0.01)));
       }
       return deltaY < 0 ? 1.08 : 0.92;
+    }
+
+    function wheelPanDeltas(event) {
+      let deltaX = event.deltaX || 0;
+      let deltaY = event.deltaY || 0;
+      if (event.deltaMode === 1) {
+        deltaX *= 16;
+        deltaY *= 16;
+      }
+      return { deltaX, deltaY };
+    }
+
+    function isTrackpadZoom(event) {
+      return Boolean(event.ctrlKey || event.metaKey);
     }
 
     function trackCanvasGestures(canvas, onPinch) {
@@ -2700,12 +2721,21 @@ HTML_TEMPLATE = r"""<!doctype html>
       trackChartListener(canvas, "wheel", event => {
         event.preventDefault();
         const rect = canvas.getBoundingClientRect();
-        const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-        zoom2DAt(point, wheelZoomFactor(event), rect.width, rect.height);
+        if (isTrackpadZoom(event)) {
+          const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+          zoom2DAt(point, wheelZoomFactor(event), rect.width, rect.height);
+        } else {
+          const { deltaX, deltaY } = wheelPanDeltas(event);
+          pan2DBy(deltaX, deltaY, rect.width, rect.height);
+        }
         hover = null;
         tooltip.style.display = "none";
         render();
       }, { passive: false });
+      trackChartListener(canvas, "dblclick", event => {
+        event.preventDefault();
+        reset2DView();
+      });
       trackCanvasGestures(canvas, (factor, gestureEvent) => {
         const rect = canvas.getBoundingClientRect();
         const point = Number.isFinite(gestureEvent?.clientX) && Number.isFinite(gestureEvent?.clientY)
@@ -3163,10 +3193,22 @@ HTML_TEMPLATE = r"""<!doctype html>
       });
       trackChartListener(canvas, "wheel", event => {
         event.preventDefault();
-        zoom *= wheelZoomFactor(event);
-        zoom = Math.max(0.55, Math.min(8, zoom));
+        if (isTrackpadZoom(event)) {
+          zoom *= wheelZoomFactor(event);
+          zoom = Math.max(0.55, Math.min(8, zoom));
+        } else {
+          const { deltaX, deltaY } = wheelPanDeltas(event);
+          rotationY -= deltaX * 0.005;
+          rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotationX + deltaY * 0.005));
+          hover = null;
+          tooltip.style.display = "none";
+        }
         render();
       }, { passive: false });
+      trackChartListener(canvas, "dblclick", event => {
+        event.preventDefault();
+        setCamera(initialCamera);
+      });
       trackCanvasGestures(canvas, factor => {
         zoom *= factor;
         zoom = Math.max(0.55, Math.min(8, zoom));

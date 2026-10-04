@@ -322,8 +322,16 @@ def test_2d_chart_supports_zoom_pan_reset_and_zoom_number(tmp_path: Path) -> Non
     assert "zoomIndicator.textContent = `${view2D.zoom.toFixed(2)}x`" in html
     assert "function zoom2DAt(" in html
     assert "function pan2DBy(" in html
+    assert "function wheelPanDeltas(" in html
+    assert "function isTrackpadZoom(" in html
+    assert "if (isTrackpadZoom(event))" in html
+    assert "pan2DBy(deltaX, deltaY, rect.width, rect.height)" in html
+    assert 'trackChartListener(canvas, "dblclick"' in html
     assert "function pointIn2DView(row)" in html
     assert "config.rows.filter(pointIn2DView).map" in html
+    assert 'class="chart-hint"' in html
+    assert "Pinch or Ctrl+scroll to zoom" in html
+    assert "rotationY -= deltaX * 0.005" in html
     hover_clear = (
         'hover = null;\n        tooltip.style.display = "none";\n        render();'
     )
@@ -337,7 +345,6 @@ def test_2d_chart_supports_zoom_pan_reset_and_zoom_number(tmp_path: Path) -> Non
         'trackChartListener(document.getElementById(config.resetButtonId), '
         '"click", reset2DView)' in html
     )
-
 
 def test_pareto_chart_styles_prioritize_optimal_when_flags_overlap(
     tmp_path: Path,
