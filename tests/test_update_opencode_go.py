@@ -619,6 +619,32 @@ def test_snapshot_selector_prefers_go_plan_panel() -> None:
         updater.select_pricing_snapshot([go, dict(go)])
 
 
+def test_snapshot_selector_prefers_go_plan_value() -> None:
+    go_headers = [
+        "Model",
+        "Input",
+        "Output",
+        "Cached Read",
+        "Cached Write",
+        "Monthly limit",
+    ]
+    go: updater.TableSnapshot = {
+        "headers": go_headers,
+        "rows": [SOURCE_ROWS[0]],
+        "panel": "go-pricing-panel-go",
+        "plan": "go",
+    }
+    plus: updater.TableSnapshot = {
+        "headers": go_headers,
+        "rows": [SOURCE_ROWS[1]],
+        "panel": "go-pricing-panel-go-plus",
+        "plan": "go-plus",
+    }
+    headers, rows = updater.select_pricing_snapshot([plus, go])
+    assert headers == go_headers
+    assert rows == [SOURCE_ROWS[0]]
+
+
 def test_monthly_limit_header_alias_matches_usage() -> None:
     alias_headers = [
         "Model",

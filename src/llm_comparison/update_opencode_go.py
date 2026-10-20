@@ -160,8 +160,10 @@ class TableSnapshot(TypedDict):
     headers: list[str]
     rows: list[list[str]]
     panel: NotRequired[str | None]
+    plan: NotRequired[str | None]
 
-GO_PLAN_PANEL_ID = "tab-panel-0"
+GO_PLAN_VALUE = "go"
+GO_PLAN_PANEL_IDS = frozenset({"tab-panel-0", "go-pricing-panel-go"})
 
 
 def normalize_text(value: str) -> str:
@@ -200,7 +202,8 @@ def select_pricing_snapshot(
         panel_matches = [
             snapshot
             for snapshot in matches
-            if snapshot.get("panel") == GO_PLAN_PANEL_ID
+            if snapshot.get("panel") in GO_PLAN_PANEL_IDS
+            or snapshot.get("plan") == GO_PLAN_VALUE
         ]
         if len(panel_matches) == 1:
             matches = panel_matches
@@ -778,6 +781,8 @@ async def scrape_table(
                         // quota parser sees "$60" and "4x" instead of a glued "$604x".
                         Array.from(row.cells, cell => cell.innerText || '')),
                       panel: table.closest('[role=tabpanel]')?.id || null,
+                      plan: table.closest('[data-plan-panel]')
+                        ?.dataset?.planPanel || null,
                     }))
                     """
                 ),
