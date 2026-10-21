@@ -733,7 +733,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       <div>
         <h1 id="pageTitle">LLM Comparison</h1>
         <div class="meta-stack">
-          <div class="meta" id="dataFreshness">Data updated: 2026-10-20T18:37:44Z</div>
+          <div class="meta" id="dataFreshness">Data updated: 2026-10-21T17:30:41Z</div>
           <div class="meta" id="summary"></div>
         </div>
       </div>
@@ -860,7 +860,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   </main>
   <script>
     const payload = __PAYLOAD__;
-    const dataUpdated = "2026-10-20T18:37:44Z";
+    const dataUpdated = "2026-10-21T17:30:41Z";
     const displayLabels = {
       model: "Model",
       context_window_tokens: "Context Window",
