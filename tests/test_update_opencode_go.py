@@ -784,3 +784,80 @@ def test_promo_usage_rows_join_and_score() -> None:
         "60"
     )
     assert Decimal(off_peak["value_score"]) > 0
+
+
+def test_promo_currency_cell_uses_current_price(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert updater.parse_currency(
+        "$4.00 $2.00", field="Input", source_label="Gemini 4 Argon (50% off)"
+    ) == Decimal("2.00")
+    assert updater.parse_currency(
+        "$20.00 $10.00", field="Output", source_label="Gemini 4 Argon (50% off)"
+    ) == Decimal("10.00")
+    assert "promo" in capsys.readouterr().err
+
+
+def test_promo_price_and_label_rows_join_and_score() -> None:
+    source = [
+        [
+            "Gemini 4 Argon (50% off)",
+            "$4.00 $2.00",
+            "$20.00 $10.00",
+            "$0.20 $0.10",
+            "-",
+            "$30",
+        ]
+    ]
+    aa_rows = [
+        {
+            "model": "Gemini 4 Argon (high)",
+            "artificial_analysis_intelligence_index": "50",
+        }
+    ]
+    rows = updater.build_output_rows(
+        HEADERS, source, aa_rows, scraped_at=SCRAPED_AT
+    )
+    assert len(rows) == 1
+    argon = rows[0]
+    assert argon["model"] == "Gemini 4 Argon"
+    assert argon["input_price_usd_per_1m_tokens"] == "2"
+    assert argon["output_price_usd_per_1m_tokens"] == "10"
+    assert argon["cache_read_usd_per_1m_tokens"] == "0.1"
+    assert argon["artificial_analysis_model"] == "Gemini 4 Argon (high)"
+    assert argon["artificial_analysis_intelligence_index"] == "50"
+    assert Decimal(argon["value_score"]) > 0
+
+
+@pytest.mark.parametrize(
+    ("model", "aa_model", "index"),
+    [
+        ("DeepSeek V4.1 Flash (Off-Peak)", "DeepSeek V4.1 Flash 1017 (max)", "33"),
+        ("DeepSeek V4.1 Flash (Peak)", "DeepSeek V4.1 Flash 1017 (max)", "33"),
+        ("Hy4", "Tencent Hy4", "35"),
+        ("Hy4 preview", "Tencent Hy4", "35"),
+        ("MiniMax M3.1 Flash", "MiniMax-M3.1-Flash", "29"),
+    ],
+)
+def test_current_renamed_models_select_their_aa_row(
+    model: str, aa_model: str, index: str
+) -> None:
+    aa_rows = [
+        {"model": aa_model, "artificial_analysis_intelligence_index": index}
+    ]
+    assert updater.select_aa_candidate(model, aa_rows) == (
+        aa_model,
+        Decimal(index),
+    )
+
+
+def test_blank_aa_index_revokes_a_previous_score() -> None:
+    source = [["Hy3", "$0.14", "$0.58", "$0.035", "-", "$60"]]
+    aa_rows = [{"model": "Hy3", "artificial_analysis_intelligence_index": ""}]
+    rows = updater.build_output_rows(
+        HEADERS, source, aa_rows, scraped_at=SCRAPED_AT
+    )
+    hy3 = rows[0]
+    assert hy3["artificial_analysis_model"] == ""
+    assert hy3["artificial_analysis_intelligence_index"] == ""
+    assert hy3["value_score"] == ""

@@ -37,12 +37,14 @@ DISPLAY_TO_CSV: dict[str, str] = {
     "Cost per Task": "cost_per_task",
     "Input Price (USD/1M Tokens)": "input_price_usd_per_1m_tokens",
     "Output Price (USD/1M Tokens)": "output_price_usd_per_1m_tokens",
+    "Average (Tokens/s)": "average_tokens_per_second",
     "Median (Tokens/s)": "median_tokens_per_second",
     "P5 (Tokens/s)": "p5_tokens_per_second",
     "P25 (Tokens/s)": "p25_tokens_per_second",
     "P75 (Tokens/s)": "p75_tokens_per_second",
     "P95 (Tokens/s)": "p95_tokens_per_second",
     "First Chunk Latency (s)": "first_chunk_latency_seconds",
+    "First Token Latency (s)": "first_token_latency_seconds",
     "First Answer Latency (s)": "first_answer_latency_seconds",
     "P5 First Chunk Latency (s)": "p5_first_chunk_latency_seconds",
     "P25 First Chunk Latency (s)": "p25_first_chunk_latency_seconds",
@@ -109,6 +111,13 @@ def build_display_header(primary: str, secondary: str) -> str:
         return "Total Response Time (s)"
     if primary == "Reasoning" and secondary == "Time (s)":
         return "Reasoning Time (s)"
+    if secondary == "tok/s":
+        return f"{primary} (Tokens/s)"
+    if secondary == "Token (s)":
+        if primary == "First Answer":
+            return "First Answer Latency (s)"
+        if primary == "First":
+            return "First Token Latency (s)"
     if secondary in {"USD/1M Tokens", "Tokens/s"}:
         return f"{primary} ({secondary})"
     return primary

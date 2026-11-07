@@ -4,10 +4,12 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 from llm_comparison.convert_results import (
+    build_display_header,
     clean_csv_cell,
     parse_context_window,
     parse_headers,
     parse_input,
+    to_csv_key,
     update_upload_dates,
     write_table_csv,
 )
@@ -192,3 +194,26 @@ def test_update_upload_dates_distinguishes_same_day_refreshes(tmp_path: Path) ->
     assert 'const dataUpdated = "2026-05-20T14:05:06Z"' in first_refresh
     assert "Data updated: 2026-05-20T16:07:08Z" in second_refresh
     assert 'const dataUpdated = "2026-05-20T16:07:08Z"' in second_refresh
+
+
+def test_scraped_speed_and_latency_headers_map_to_canonical_keys() -> None:
+    pairs = [
+        ("Average", "tok/s", "Average (Tokens/s)", "average_tokens_per_second"),
+        (
+            "First",
+            "Token (s)",
+            "First Token Latency (s)",
+            "first_token_latency_seconds",
+        ),
+        (
+            "First Answer",
+            "Token (s)",
+            "First Answer Latency (s)",
+            "first_answer_latency_seconds",
+        ),
+        ("Time per Task", "Minutes", "Time per Task", "time_per_task"),
+    ]
+    for primary, secondary, display, key in pairs:
+        header = build_display_header(primary, secondary)
+        assert header == display
+        assert to_csv_key(header) == key

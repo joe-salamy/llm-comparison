@@ -117,8 +117,18 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
         "DeepSeek V4 Flash (high)",
         "DeepSeek V4 Flash",
     ),
-    "DeepSeek V4.1 Flash (Off-Peak)": ("DeepSeek V4.1 Flash (max)",),
-    "DeepSeek V4.1 Flash (Peak)": ("DeepSeek V4.1 Flash (max)",),
+    "DeepSeek V4.1 Flash (Off-Peak)": (
+        "DeepSeek V4.1 Flash 1017 (max)",
+        "DeepSeek V4.1 Flash (max)",
+        "DeepSeek V4.1 Flash (high)",
+        "DeepSeek V4.1 Flash",
+    ),
+    "DeepSeek V4.1 Flash (Peak)": (
+        "DeepSeek V4.1 Flash 1017 (max)",
+        "DeepSeek V4.1 Flash (max)",
+        "DeepSeek V4.1 Flash (high)",
+        "DeepSeek V4.1 Flash",
+    ),
     "DeepSeek V4 Flash Vision Exp (Off-Peak)": (
         "DeepSeek V4 Flash Vision (max)",
         "DeepSeek V4 Flash 0731 (max)",
@@ -133,7 +143,23 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
         "DeepSeek V4 Flash (high)",
         "DeepSeek V4 Flash",
     ),
+    "MiniMax M3.1 Flash": ("MiniMax-M3.1-Flash",),
+    "Gemini 4 Argon": (
+        "Gemini 4 Argon (high)",
+        "Gemini 4 Argon (medium)",
+        "Gemini 4 Argon (low)",
+    ),
+    "Gemini 4 Argon Contributor": (
+        "Gemini 4 Argon (high)",
+        "Gemini 4 Argon (medium)",
+        "Gemini 4 Argon (low)",
+    ),
+    "Hy4": ("Tencent Hy4",),
+    "Hy4 preview": ("Tencent Hy4",),
     "Hy3": ("Hy3",),
+    "Beam Free": (),
+    "Crouton Alpha Free": (),
+    "Iceman Contributor Free": (),
     "LongCat 2.5 Preview Free": (),
     "Space Bunny Free": (),
     "Ox Alpha Free": (),
@@ -141,6 +167,11 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
 
 TIER_LABEL_PATTERN = re.compile(
     r"(?P<model>.+) \((?P<operator>≤|>) (?P<threshold>[1-9]\d*)K tokens\)"
+)
+CURRENCY_PATTERN = re.compile(r"\$(?:\d+(?:\.\d*)?|\.\d+)")
+CURRENCY_AMOUNT_PATTERN = re.compile(r"\$(\d+(?:\.\d*)?|\.\d+)")
+PROMO_MODEL_SUFFIX = re.compile(
+    r"\s*\(\s*\d+(?:\.\d+)?%\s*off\s*\)$", re.IGNORECASE
 )
 
 
@@ -224,17 +255,33 @@ def select_pricing_snapshot(
 def parse_currency(
     value: str, *, field: str, source_label: str, allow_blank: bool = False
 ) -> Decimal | None:
+    """Parse a token price, tolerating strikethrough promo cells.
+
+    Promo cells render as "<del>$4.00</del> $2.00" and innerText keeps both
+    amounts, so the last price is the current one (matching parse_usage).
+    """
     normalized = normalize_text(value)
     if allow_blank and normalized == "-":
         return None
     if normalized.lower() == "free":
         return Decimal(0)
-    if not re.fullmatch(r"\$(?:\d+(?:\.\d*)?|\.\d+)", normalized):
-        raise RuntimeError(
-            f"Invalid OpenCode Go {field} for {source_label!r}: {value!r}"
+    if CURRENCY_PATTERN.fullmatch(normalized):
+        text = normalized[1:]
+    else:
+        amounts = CURRENCY_AMOUNT_PATTERN.findall(normalized)
+        if len(amounts) < 2:
+            raise RuntimeError(
+                f"Invalid OpenCode Go {field} for {source_label!r}: {value!r}"
+            )
+        text = amounts[-1]
+        print(
+            f"warning: OpenCode Go {field} for {source_label!r} carries promo "
+            f"text; using current price ${text} from {value!r}",
+            file=sys.stderr,
+            flush=True,
         )
     try:
-        parsed = Decimal(normalized[1:])
+        parsed = Decimal(text)
     except InvalidOperation as error:
         raise RuntimeError(
             f"Invalid OpenCode Go {field} for {source_label!r}: {value!r}"
@@ -329,6 +376,13 @@ def parse_source_rows(headers: list[str], rows: list[list[str]]) -> list[PriceRo
             model = source_label
             long_context = False
             tier_threshold_tokens = None
+        # A discount renders in the label ("Gemini 4 Argon (50% off)"); the
+        # model identity is the part before it, so Artificial Analysis joins.
+        model = PROMO_MODEL_SUFFIX.sub("", model).strip()
+        if not model:
+            raise RuntimeError(
+                f"OpenCode Go source label has no model name: {source_label!r}"
+            )
 
         if normalize_text(values[1]) == "-":
             input_price = Decimal(0)
@@ -649,7 +703,9 @@ def enrich_rows(
                     row["long_context_blended_usd_per_1m_tokens"] = decimal_text(
                         long_blend
                     )
-                    quota = parse_quota(row.get("monthly_usage_usd") or row.get("monthly_quota_usd"))
+                    quota = parse_quota(
+                        row.get("monthly_usage_usd") or row.get("monthly_quota_usd")
+                    )
                     if quota is not None:
                         long_effective = effective_price(long_blend, quota)
                         row["long_context_effective_usd_per_1m_tokens"] = decimal_text(
@@ -668,10 +724,14 @@ def enrich_rows(
         primary_blend = blended_price(cache_read, input_price, output_price)
         row["opencode_go_blended_usd_per_1m_tokens"] = decimal_text(primary_blend)
 
-        quota = parse_quota(row.get("monthly_usage_usd") or row.get("monthly_quota_usd"))
+        quota = parse_quota(
+            row.get("monthly_usage_usd") or row.get("monthly_quota_usd")
+        )
         if quota is not None:
             primary_effective = effective_price(primary_blend, quota)
-            row["opencode_go_effective_usd_per_1m_tokens"] = decimal_text(primary_effective)
+            row["opencode_go_effective_usd_per_1m_tokens"] = decimal_text(
+                primary_effective
+            )
         else:
             row["opencode_go_effective_usd_per_1m_tokens"] = ""
 
@@ -684,7 +744,9 @@ def enrich_rows(
             row["long_context_blended_usd_per_1m_tokens"] = decimal_text(long_blend)
             if quota is not None:
                 long_effective = effective_price(long_blend, quota)
-                row["long_context_effective_usd_per_1m_tokens"] = decimal_text(long_effective)
+                row["long_context_effective_usd_per_1m_tokens"] = decimal_text(
+                    long_effective
+                )
             else:
                 row["long_context_effective_usd_per_1m_tokens"] = ""
         else:
