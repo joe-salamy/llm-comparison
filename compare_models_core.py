@@ -41,6 +41,9 @@ DISPLAY_LABELS = {
     "cost_per_task": "Cost per Task",
     "input_price_usd_per_1m_tokens": "Input Price (USD/1M Tokens)",
     "output_price_usd_per_1m_tokens": "Output Price (USD/1M Tokens)",
+    "average_tokens_per_second": "Average (Tokens/s)",
+    "first_token_latency_seconds": "First Token Latency (s)",
+    "time_per_task": "Time per Task",
     "median_tokens_per_second": "Median (Tokens/s)",
     "p5_tokens_per_second": "P5 (Tokens/s)",
     "p25_tokens_per_second": "P25 (Tokens/s)",
@@ -68,9 +71,9 @@ MAIN_COLUMNS = [
     ("creator", "Creator"),
     ("artificial_analysis_intelligence_index", "Intelligence"),
     ("cost_per_task", "Cost per Task"),
-    ("median_tokens_per_second", "Speed"),
-    ("first_chunk_latency_seconds", "Latency"),
-    ("total_response_time_seconds", "End-to-End Response Time"),
+    ("average_tokens_per_second", "Speed"),
+    ("first_token_latency_seconds", "Latency"),
+    ("time_per_task", "Time per Task"),
 ]
 
 ALIASES = {
@@ -83,13 +86,13 @@ ALIASES = {
     "price": "cost_per_task",
     "cost": "cost_per_task",
     "cost-per-task": "cost_per_task",
-    "speed": "median_tokens_per_second",
-    "tokens-per-second": "median_tokens_per_second",
-    "latency": "first_chunk_latency_seconds",
-    "first-chunk-latency": "first_chunk_latency_seconds",
-    "response-time": "total_response_time_seconds",
-    "end-to-end-response-time": "total_response_time_seconds",
-    "total-response-time": "total_response_time_seconds",
+    "speed": "average_tokens_per_second",
+    "tokens-per-second": "average_tokens_per_second",
+    "latency": "first_token_latency_seconds",
+    "first-token-latency": "first_token_latency_seconds",
+    "response-time": "time_per_task",
+    "end-to-end-response-time": "time_per_task",
+    "total-response-time": "time_per_task",
 }
 
 LOWER_IS_BETTER_MARKERS = ("cost", "price", "usd", "latency", "time")
