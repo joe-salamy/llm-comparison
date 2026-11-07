@@ -885,6 +885,7 @@ HTML_TEMPLATE = r"""<!doctype html>
       cost_per_task: "Cost per Task",
       input_price_usd_per_1m_tokens: "Input Price (USD/1M Tokens)",
       output_price_usd_per_1m_tokens: "Output Price (USD/1M Tokens)",
+      time_per_task: "Time per Task",
       median_tokens_per_second: "Median (Tokens/s)",
       p5_tokens_per_second: "P5 (Tokens/s)",
       p25_tokens_per_second: "P25 (Tokens/s)",
