@@ -6,21 +6,20 @@ import csv
 import re
 import sys
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import NotRequired, TypedDict, cast
+from typing import TypedDict, cast
 
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_URL = "https://opencode.ai/docs/go/"
+DEFAULT_URL = "https://opencode.ai/console/go"
 DEFAULT_CSV = PROJECT_ROOT / "data/opencode_go.csv"
 DEFAULT_AA_CSV = PROJECT_ROOT / "data/results.csv"
 
 SOURCE_HEADERS = ["Model", "Input", "Output", "Cached Read", "Cached Write", "Usage"]
-USAGE_HEADER_ALIASES = frozenset({"Usage", "Monthly limit"})
 CSV_COLUMNS = [
     "model",
     "input_price_usd_per_1m_tokens",
@@ -187,14 +186,31 @@ class PriceRow(TypedDict):
     tier_threshold_tokens: int | None
 
 
-class TableSnapshot(TypedDict):
-    headers: list[str]
-    rows: list[list[str]]
-    panel: NotRequired[str | None]
-    plan: NotRequired[str | None]
+class ConsolePriceRow(TypedDict):
+    """One row of the console Pricing view, with its variant annotation.
 
-GO_PLAN_VALUE = "go"
-GO_PLAN_PANEL_IDS = frozenset({"tab-panel-0", "go-pricing-panel-go"})
+    The console repeats a model for long-context tiers ("Over 512K tokens"),
+    peak-hour windows ("Peak hours, ..."), and scheduled price changes
+    ("From Dec 1, 2026"); ``annotation`` holds that trailing label.
+    """
+
+    model: str
+    annotation: str
+    cells: list[str]
+
+
+class ConsoleLimitRow(TypedDict):
+    model: str
+    quota: str
+
+
+TIER_ANNOTATION_PATTERN = re.compile(r"Over (?P<threshold>[1-9]\d*)K tokens\b")
+FUTURE_PRICE_ANNOTATION_PATTERN = re.compile(
+    r"From (?P<date>[A-Z][a-z]{2} \d{1,2}, \d{4})"
+)
+PEAK_ANNOTATION_PREFIX = "Peak hours"
+GO_QUOTA_PATTERN = re.compile(r"Go:\s*(?P<quota>[^;]+)")
+UNLIMITED_QUOTA_VALUES = frozenset({"∞", "Unlimited"})
 
 
 def normalize_text(value: str) -> str:
@@ -202,54 +218,131 @@ def normalize_text(value: str) -> str:
 
 
 def is_pricing_headers(normalized_headers: list[str]) -> bool:
-    return (
-        len(normalized_headers) == len(SOURCE_HEADERS)
-        and normalized_headers[:5] == SOURCE_HEADERS[:5]
-        and normalized_headers[5] in USAGE_HEADER_ALIASES
+    return normalized_headers == SOURCE_HEADERS
+
+
+def normalize_annotation(value: str) -> str:
+    return normalize_text(value).replace(" ,", ",")
+
+
+def parse_go_quota(value: str, *, model: str) -> str:
+    """Turn the console's "Go: $15; Go Plus: $60" text into a Usage cell."""
+    match = GO_QUOTA_PATTERN.search(normalize_text(value))
+    if match is None:
+        raise RuntimeError(
+            f"OpenCode Go monthly limit for {model!r} did not match: {value!r}"
+        )
+    quota = normalize_text(match.group("quota"))
+    return "-" if quota in UNLIMITED_QUOTA_VALUES else quota
+
+
+def classify_price_row(
+    row: ConsolePriceRow, *, today: date
+) -> tuple[str, str | None]:
+    """Classify a Pricing view row as base, tier, peak, or future.
+
+    Returns the kind and its detail: the tier threshold in tokens or the
+    scheduled price date. Future rows whose date has arrived are treated as
+    the current base price.
+    """
+    model = normalize_text(row["model"])
+    annotation = normalize_annotation(row["annotation"])
+    if not annotation:
+        return "base", None
+    tier_match = TIER_ANNOTATION_PATTERN.search(annotation)
+    if tier_match is not None:
+        return "tier", tier_match.group("threshold") + "000"
+    if annotation.startswith(PEAK_ANNOTATION_PREFIX):
+        return "peak", None
+    future_match = FUTURE_PRICE_ANNOTATION_PATTERN.search(annotation)
+    if future_match is not None:
+        scheduled = datetime.strptime(future_match.group("date"), "%b %d, %Y")
+        if scheduled.date() > today:
+            return "future", future_match.group("date")
+        return "base", None
+    raise RuntimeError(
+        f"Unrecognized OpenCode Go price annotation for {model!r}: {annotation!r}"
     )
 
 
-def select_pricing_snapshot(
-    snapshots: list[TableSnapshot],
-) -> tuple[list[str], list[list[str]]]:
-    matches = [
-        snapshot
-        for snapshot in snapshots
-        if is_pricing_headers(
-            [normalize_text(header) for header in snapshot["headers"]]
-        )
-    ]
-    if not matches:
-        discovered = [
-            [normalize_text(header) for header in snapshot["headers"]]
-            for snapshot in snapshots
-        ]
-        raise RuntimeError(
-            f"Could not find the OpenCode Go pricing table; found headers: {discovered}"
-        )
-    if len(matches) != 1:
-        # The page now renders Go and Go Plus quota tables side by side in
-        # tab panels; token prices match, so pin the Go plan panel.
-        panel_matches = [
-            snapshot
-            for snapshot in matches
-            if snapshot.get("panel") in GO_PLAN_PANEL_IDS
-            or snapshot.get("plan") == GO_PLAN_VALUE
-        ]
-        if len(panel_matches) == 1:
-            matches = panel_matches
-        else:
-            raise RuntimeError("Found multiple OpenCode Go pricing tables")
-    match = matches[0]
-    if not match["rows"]:
-        raise RuntimeError("OpenCode Go pricing table has no data rows")
-    for row_number, row in enumerate(match["rows"], start=1):
-        if len(row) != len(match["headers"]):
+def build_source_rows(
+    price_rows: Sequence[ConsolePriceRow],
+    limit_rows: Sequence[ConsoleLimitRow],
+    *,
+    today: date,
+) -> list[list[str]]:
+    """Merge the console Pricing and Limits views into SOURCE_HEADERS rows."""
+    quotas: dict[str, str] = {}
+    for row in limit_rows:
+        model = normalize_text(row["model"])
+        if not model:
             raise RuntimeError(
-                f"OpenCode Go pricing row {row_number} has {len(row)} cells; "
-                f"expected {len(match['headers'])}"
+                "Could not read OpenCode Go monthly limits; a row has no model name"
             )
-    return match["headers"], match["rows"]
+        if model in quotas:
+            raise RuntimeError(f"Duplicate OpenCode Go monthly limit: {model!r}")
+        quotas[model] = parse_go_quota(row["quota"], model=model)
+
+    grouped: dict[str, list[tuple[str, str | None, ConsolePriceRow]]] = {}
+    for row in price_rows:
+        model = normalize_text(row["model"])
+        if not model:
+            raise RuntimeError("OpenCode Go pricing row has no model name")
+        kind, detail = classify_price_row(row, today=today)
+        grouped.setdefault(model, []).append((kind, detail, row))
+
+    output: list[list[str]] = []
+    seen_labels: set[str] = set()
+
+    def emit(label: str, row: ConsolePriceRow, model: str) -> None:
+        if label in seen_labels:
+            raise RuntimeError(f"Duplicate OpenCode Go source label: {label!r}")
+        seen_labels.add(label)
+        cells = row["cells"]
+        if len(cells) != len(SOURCE_HEADERS) - 2:
+            raise RuntimeError(
+                f"OpenCode Go pricing row for {label!r} has {len(cells)} price "
+                f"cells; expected {len(SOURCE_HEADERS) - 2}"
+            )
+        if model not in quotas:
+            raise RuntimeError(f"OpenCode Go has no monthly limit for {model!r}")
+        output.append([label, *cells, quotas[model]])
+
+    for model, entries in grouped.items():
+        kinds = [kind for kind, _, _ in entries]
+        base_entries = [entry for entry in entries if entry[0] == "base"]
+        tier_entries = [entry for entry in entries if entry[0] == "tier"]
+        peak_entries = [entry for entry in entries if entry[0] == "peak"]
+        future_entries = [entry for entry in entries if entry[0] == "future"]
+        if len(base_entries) != 1:
+            raise RuntimeError(
+                f"OpenCode Go {model!r} needs exactly one base price row; "
+                f"found kinds: {kinds}"
+            )
+        if len(tier_entries) > 1 or (tier_entries and peak_entries):
+            raise RuntimeError(
+                f"OpenCode Go {model!r} combines unsupported price variants: "
+                f"found kinds: {kinds}"
+            )
+        for _, detail, _ in future_entries:
+            print(
+                f"warning: OpenCode Go {model!r} has a scheduled price from "
+                f"{detail}; keeping the current price",
+                file=sys.stderr,
+                flush=True,
+            )
+        base_row = base_entries[0][2]
+        if tier_entries:
+            _, threshold, tier_row = tier_entries[0]
+            tier_k = int(threshold) // 1_000
+            emit(f"{model} (≤ {tier_k}K tokens)", base_row, model)
+            emit(f"{model} (> {tier_k}K tokens)", tier_row, model)
+        elif peak_entries:
+            emit(f"{model} (Off-Peak)", base_row, model)
+            emit(f"{model} (Peak)", peak_entries[0][2], model)
+        else:
+            emit(model, base_row, model)
+    return output
 
 
 def parse_currency(
@@ -261,7 +354,7 @@ def parse_currency(
     amounts, so the last price is the current one (matching parse_usage).
     """
     normalized = normalize_text(value)
-    if allow_blank and normalized == "-":
+    if allow_blank and normalized in {"", "-"}:
         return None
     if normalized.lower() == "free":
         return Decimal(0)
@@ -810,6 +903,45 @@ def write_csv(rows: list[dict[str, str]], path: Path) -> None:
         writer.writerows(rows)
 
 
+LIMIT_ROWS_SCRIPT = """
+(table) => Array.from(table.querySelectorAll('tbody tr'), row => {
+  const header = row.querySelector('th');
+  const usage = row.querySelector('td[data-allowance-type="usage"]');
+  return {
+    model: (
+      header?.querySelector('[data-layer="model-name"]')?.getAttribute('title') ||
+      header?.innerText ||
+      ''
+    ).trim(),
+    quota: (usage?.querySelector('.sr-only')?.textContent || '').trim(),
+  };
+})
+"""
+
+PRICE_ROWS_SCRIPT = """
+(table) => Array.from(table.querySelectorAll('tbody tr'), row => {
+  const header = row.querySelector('th');
+  const nameCell = header?.querySelector('[data-layer="model-name"]');
+  // Variant rows (tiers, peak windows, scheduled prices) have no model-name
+  // span: their name sits in an sr-only prefix before the annotation.
+  const name = (
+    nameCell?.getAttribute('title') ||
+    header?.querySelector('.sr-only')?.textContent ||
+    ''
+  ).replace(/,\\s*$/, '').trim();
+  const text = (header?.innerText || '').trim();
+  const annotation = nameCell
+    ? ''
+    : text.slice(text.indexOf(name) + name.length).replace(/^[,\\s]+/, '').trim();
+  return {
+    model: name,
+    annotation,
+    cells: Array.from(row.cells, cell => cell.innerText || '').slice(1),
+  };
+})
+"""
+
+
 async def scrape_table(
     url: str, *, timeout_ms: int, headed: bool
 ) -> tuple[list[str], list[list[str]]]:
@@ -827,31 +959,35 @@ async def scrape_table(
                 )
             except PlaywrightTimeoutError as error:
                 raise RuntimeError(
-                    "Could not find the OpenCode Go pricing table; found headers: []"
+                    "Could not find the OpenCode Go pricing table; the console "
+                    "page rendered no tables"
                 ) from error
-            snapshots = cast(
-                list[TableSnapshot],
-                await page.locator("table").evaluate_all(
-                    """
-                    (tables) => tables.map(table => ({
-                      headers: Array.from(
-                        table.querySelectorAll('thead tr:last-child th'),
-                        cell => cell.textContent || ''
-                      ),
-                      rows: Array.from(table.querySelectorAll('tbody tr'), row =>
-                        // innerText splits <br> promo notes onto their own line so the
-                        // quota parser sees "$60" and "4x" instead of a glued "$604x".
-                        Array.from(row.cells, cell => cell.innerText || '')),
-                      panel: table.closest('[role=tabpanel]')?.id || null,
-                      plan: table.closest('[data-plan-panel]')
-                        ?.dataset?.planPanel || null,
-                    }))
-                    """
+            limit_rows = cast(
+                list[ConsoleLimitRow],
+                await page.locator("table").first.evaluate(LIMIT_ROWS_SCRIPT),
+            )
+            try:
+                await page.get_by_role("button", name="Pricing", exact=True).click(
+                    timeout=timeout_ms
+                )
+                await page.locator('table[aria-label="Pricing"]').wait_for(
+                    state="visible", timeout=timeout_ms
+                )
+            except PlaywrightTimeoutError as error:
+                raise RuntimeError(
+                    "Could not open the OpenCode Go Pricing view on the console page"
+                ) from error
+            price_rows = cast(
+                list[ConsolePriceRow],
+                await page.locator('table[aria-label="Pricing"]').evaluate(
+                    PRICE_ROWS_SCRIPT
                 ),
             )
-            return select_pricing_snapshot(snapshots)
         finally:
             await browser.close()
+    return SOURCE_HEADERS, build_source_rows(
+        price_rows, limit_rows, today=datetime.now(UTC).date()
+    )
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
