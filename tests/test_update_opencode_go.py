@@ -5,6 +5,7 @@ import asyncio
 import csv
 import subprocess
 import sys
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from types import ModuleType
@@ -294,15 +295,14 @@ def test_dash_pricing_parses_as_free_zero() -> None:
     rows[0][5] = "-"
     parsed = updater.parse_source_rows(HEADERS, rows)
     assert parsed[0]["monthly_usage"] is None
-def test_blank_cached_write_parses_only_dash() -> None:
+def test_blank_cached_write_cells_parse_as_none() -> None:
     parsed = updater.parse_source_rows(HEADERS, SOURCE_ROWS)
     assert parsed[0]["cache_write_price"] is None
     rows = [row.copy() for row in SOURCE_ROWS]
     rows[0][4] = ""
-    with pytest.raises(RuntimeError, match="Cached Write"):
-        updater.parse_source_rows(HEADERS, rows)
+    assert updater.parse_source_rows(HEADERS, rows)[0]["cache_write_price"] is None
 
-@pytest.mark.parametrize("missing_index", range(6))
+@pytest.mark.parametrize("missing_index", [0, 1, 2, 3, 5])
 def test_missing_required_source_cells_fail(missing_index: int) -> None:
     rows = [row.copy() for row in SOURCE_ROWS]
     rows[0][missing_index] = ""
@@ -375,7 +375,7 @@ def test_csv_columns_and_order_are_deterministic(tmp_path: Path) -> None:
 
 def test_default_paths_resolve_from_repository_root() -> None:
     args = updater.parse_args([])
-    assert args.url == "https://opencode.ai/docs/go/"
+    assert args.url == "https://opencode.ai/console/go"
     assert args.csv == updater.PROJECT_ROOT / "data/opencode_go.csv"
     assert args.aa_csv == updater.PROJECT_ROOT / "data/results.csv"
 
@@ -580,107 +580,133 @@ def test_scrape_table_translates_missing_table_timeout_and_closes_browser(
     assert browser.closed
 
 
-def test_snapshot_selector_rejects_wrong_ambiguous_empty_and_ragged_tables() -> None:
-    valid: updater.TableSnapshot = {"headers": HEADERS, "rows": [SOURCE_ROWS[0]]}
-    with pytest.raises(RuntimeError, match="Could not find"):
-        updater.select_pricing_snapshot(
-            [{"headers": ["Model", "Other"], "rows": [["A", "B"]]}]
+def test_build_source_rows_merges_limits_with_price_variants() -> None:
+    price_rows: list[updater.ConsolePriceRow] = [
+        {
+            "model": "Kimi K3",
+            "annotation": "",
+            "cells": ["$3.00", "$15.00", "$0.30", "$3.00"],
+        },
+        {
+            "model": "Grok 4.7",
+            "annotation": "",
+            "cells": ["$2.00", "$6.00", "$0.50", ""],
+        },
+        {
+            "model": "Grok 4.7",
+            "annotation": "Over 200K tokens",
+            "cells": ["$4.00", "$12.00", "$1.00", ""],
+        },
+        {
+            "model": "DeepSeek V4 Pro",
+            "annotation": "",
+            "cells": ["$0.66", "$1.98", "$0.022", ""],
+        },
+        {
+            "model": "DeepSeek V4 Pro",
+            "annotation": "Peak hours, Weekdays 01:00-04:00, 06:00-10:00 UTC",
+            "cells": ["$1.32", "$3.96", "$0.044", ""],
+        },
+        {
+            "model": "Gemini 4 Argon",
+            "annotation": "",
+            "cells": ["$2.00", "$10.00", "$0.10", ""],
+        },
+        {
+            "model": "Gemini 4 Argon",
+            "annotation": "From Dec 1, 2026",
+            "cells": ["$4.00", "$20.00", "$0.20", ""],
+        },
+        {
+            "model": "Beam Free",
+            "annotation": "",
+            "cells": ["Free", "Free", "Free", ""],
+        },
+    ]
+    limit_rows: list[updater.ConsoleLimitRow] = [
+        {"model": "Kimi K3", "quota": "Go: $15; Go Plus: $60"},
+        {"model": "Grok 4.7", "quota": "Go: $15; Go Plus: $60"},
+        {"model": "DeepSeek V4 Pro", "quota": "Go: $15; Go Plus: $60"},
+        {"model": "Gemini 4 Argon", "quota": "Go: $30; Go Plus: $120"},
+        {"model": "Beam Free", "quota": "Go: \u221e; Go Plus: \u221e"},
+    ]
+
+    rows = updater.build_source_rows(
+        price_rows, limit_rows, today=date(2026, 11, 17)
+    )
+
+    assert rows == [
+        ["Kimi K3", "$3.00", "$15.00", "$0.30", "$3.00", "$15"],
+        ["Grok 4.7 (≤ 200K tokens)", "$2.00", "$6.00", "$0.50", "", "$15"],
+        ["Grok 4.7 (> 200K tokens)", "$4.00", "$12.00", "$1.00", "", "$15"],
+        [
+            "DeepSeek V4 Pro (Off-Peak)",
+            "$0.66",
+            "$1.98",
+            "$0.022",
+            "",
+            "$15",
+        ],
+        ["DeepSeek V4 Pro (Peak)", "$1.32", "$3.96", "$0.044", "", "$15"],
+        ["Gemini 4 Argon", "$2.00", "$10.00", "$0.10", "", "$30"],
+        ["Beam Free", "Free", "Free", "Free", "", "-"],
+    ]
+    collapsed = updater.collapse_price_rows(
+        updater.parse_source_rows(updater.SOURCE_HEADERS, rows)
+    )
+    by_model = {row["model"]: row for row in collapsed}
+    assert by_model["Grok 4.7"]["long_context_threshold_tokens"] == "200000"
+    assert by_model["Grok 4.7"]["long_context_input_price_usd_per_1m_tokens"] == "4"
+    assert by_model["Gemini 4 Argon"]["input_price_usd_per_1m_tokens"] == "2"
+    assert by_model["Beam Free"]["monthly_usage_usd"] == ""
+
+
+def test_build_source_rows_rejects_unrecognized_annotations_and_missing_limits() -> None:
+    base: updater.ConsolePriceRow = {
+        "model": "Kimi K3",
+        "annotation": "",
+        "cells": ["$3.00", "$15.00", "$0.30", "$3.00"],
+    }
+    limits: list[updater.ConsoleLimitRow] = [
+        {"model": "Kimi K3", "quota": "Go: $15; Go Plus: $60"}
+    ]
+    with pytest.raises(RuntimeError, match="Unrecognized OpenCode Go price annotation"):
+        updater.build_source_rows(
+            [dict(base, annotation="Over 512K context")],
+            limits,
+            today=date(2026, 11, 17),
         )
-    with pytest.raises(RuntimeError, match="multiple"):
-        updater.select_pricing_snapshot([valid, dict(valid)])
-    with pytest.raises(RuntimeError, match="no data rows"):
-        updater.select_pricing_snapshot([{"headers": HEADERS, "rows": []}])
-    with pytest.raises(RuntimeError, match="expected 6"):
-        updater.select_pricing_snapshot([{"headers": HEADERS, "rows": [["A", "$1"]]}])
+    with pytest.raises(RuntimeError, match="no monthly limit"):
+        updater.build_source_rows(
+            [dict(base, model="Unknown Model")], limits, today=date(2026, 11, 17)
+        )
+    with pytest.raises(RuntimeError, match="monthly limit for"):
+        updater.build_source_rows(
+            [base],
+            [{"model": "Kimi K3", "quota": "Go Plus: $60"}],
+            today=date(2026, 11, 17),
+        )
 
-def test_snapshot_selector_prefers_go_plan_panel() -> None:
-    go_headers = [
-        "Model",
-        "Input",
-        "Output",
-        "Cached Read",
-        "Cached Write",
-        "Monthly limit",
-    ]
-    go: updater.TableSnapshot = {
-        "headers": go_headers,
-        "rows": [SOURCE_ROWS[0]],
-        "panel": "tab-panel-0",
+
+def test_classify_price_row_treats_arrived_schedule_as_current() -> None:
+    row: updater.ConsolePriceRow = {
+        "model": "Gemini 4 Argon",
+        "annotation": "From Dec 1, 2026",
+        "cells": ["$4.00", "$20.00", "$0.20", ""],
     }
-    plus: updater.TableSnapshot = {
-        "headers": go_headers,
-        "rows": [SOURCE_ROWS[1]],
-        "panel": "tab-panel-1",
-    }
-    headers, rows = updater.select_pricing_snapshot([plus, go])
-    assert headers == go_headers
-    assert rows == [SOURCE_ROWS[0]]
-    with pytest.raises(RuntimeError, match="multiple"):
-        updater.select_pricing_snapshot([go, dict(go)])
-
-
-def test_snapshot_selector_prefers_go_plan_value() -> None:
-    go_headers = [
-        "Model",
-        "Input",
-        "Output",
-        "Cached Read",
-        "Cached Write",
-        "Monthly limit",
-    ]
-    go: updater.TableSnapshot = {
-        "headers": go_headers,
-        "rows": [SOURCE_ROWS[0]],
-        "panel": "go-pricing-panel-go",
-        "plan": "go",
-    }
-    plus: updater.TableSnapshot = {
-        "headers": go_headers,
-        "rows": [SOURCE_ROWS[1]],
-        "panel": "go-pricing-panel-go-plus",
-        "plan": "go-plus",
-    }
-    headers, rows = updater.select_pricing_snapshot([plus, go])
-    assert headers == go_headers
-    assert rows == [SOURCE_ROWS[0]]
-
-
-def test_monthly_limit_header_alias_matches_usage() -> None:
-    alias_headers = [
-        "Model",
-        "Input",
-        "Output",
-        "Cached Read",
-        "Cached Write",
-        "Monthly limit",
-    ]
-    headers, rows = updater.select_pricing_snapshot(
-        [{"headers": alias_headers, "rows": SOURCE_ROWS}]
+    assert updater.classify_price_row(row, today=date(2026, 11, 17)) == (
+        "future",
+        "Dec 1, 2026",
     )
-    assert headers == alias_headers
-    assert updater.parse_source_rows(headers, rows) == updater.parse_source_rows(
-        HEADERS, SOURCE_ROWS
-    )
-    assert (
-        updater.build_output_rows(headers, rows, AA_ROWS, scraped_at=SCRAPED_AT)
-        == output_rows()
-    )
+    assert updater.classify_price_row(row, today=date(2026, 12, 1)) == ("base", None)
 
 
 def test_free_and_unlimited_cells_parse_as_zero_quota_blank() -> None:
     assert updater.parse_currency("Free", field="Input", source_label="M") == Decimal(0)
     assert updater.parse_usage("Unlimited", source_label="M") is None
     assert updater.parse_usage("Unlimited\nlimited time", source_label="M") is None
-    headers = [
-        "Model",
-        "Input",
-        "Output",
-        "Cached Read",
-        "Cached Write",
-        "Monthly limit",
-    ]
     rows = updater.build_output_rows(
-        headers,
+        updater.SOURCE_HEADERS,
         [["Space Bunny Free", "Free", "Free", "Free", "-", "Unlimited\nlimited time"]],
         AA_ROWS,
         scraped_at=SCRAPED_AT,

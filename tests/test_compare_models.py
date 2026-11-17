@@ -946,7 +946,7 @@ def test_write_html_embeds_dedicated_opencode_go_payload(tmp_path: Path) -> None
         "opencode_go_effective_usd_per_1m_tokens",
         "artificial_analysis_intelligence_index",
     ]
-    assert go["sourceUrl"] == "https://opencode.ai/docs/go/"
+    assert go["sourceUrl"] == "https://opencode.ai/console/go#pricing"
     assert go["formula"] == "((7 × cached read + 2 × input + output) ÷ 10) ÷ monthly quota"
     assert go["scrapedAt"] == "2026-07-17T14:32:05Z"
     assert "Ranked <\\/script>" in html

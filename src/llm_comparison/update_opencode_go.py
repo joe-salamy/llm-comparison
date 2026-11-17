@@ -42,14 +42,30 @@ CSV_COLUMNS = [
     "scraped_at",
 ]
 
+# Artificial Analysis renders variant effort as a trailing word ("... 1017
+# Max") while older pages used parentheses; accept both spellings.
+DEEPSEEK_V41_ALIASES: tuple[str, ...] = (
+    "DeepSeek V4.1 Flash 1017 Max",
+    "DeepSeek V4.1 Flash 1017 (max)",
+    "DeepSeek V4.1 Flash (max)",
+    "DeepSeek V4.1 Flash (high)",
+    "DeepSeek V4.1 Flash",
+)
+
 AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
-    "Grok 4.7": ("Grok 4.7 (high)", "Grok 4.7 (xhigh)"),
+    "Grok 4.7": (
+        "Grok 4.7 High",
+        "Grok 4.7 Xhigh",
+        "Grok 4.7 (high)",
+        "Grok 4.7 (xhigh)",
+    ),
     "Grok 4.6": ("Grok 4.6 (high)", "Grok 4.6 (xhigh)"),
     "Grok 4.5": ("Grok 4.5 (high)",),
-    "GLM-5.3": ("GLM-5.3 (max)",),
+    "GLM-5.3": ("GLM-5.3 Max", "GLM-5.3 (max)"),
     "GLM-5.2": ("GLM-5.2 (max)", "GLM-5.2"),
     "GLM-5.1": ("GLM-5.1",),
     "GPT 6 Luna": (
+        "GPT-6 Luna Max",
         "GPT-6 Luna (max)",
         "GPT-6 Luna (xhigh)",
         "GPT-6 Luna (high)",
@@ -81,6 +97,7 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
     "Qwen3.7 Plus": ("Qwen3.7 Plus",),
     "Qwen3.6 Plus": ("Qwen3.6 Plus",),
     "DeepSeek V4 Pro": (
+        "DeepSeek V4 Pro 0813 Max",
         "DeepSeek V4 Pro 0813 (max)",
         "DeepSeek V4 Pro (max)",
         "DeepSeek V4 Pro (high)",
@@ -93,12 +110,14 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
         "DeepSeek V4 Flash",
     ),
     "DeepSeek V4 Pro (Off-Peak)": (
+        "DeepSeek V4 Pro 0813 Max",
         "DeepSeek V4 Pro 0813 (max)",
         "DeepSeek V4 Pro (max)",
         "DeepSeek V4 Pro (high)",
         "DeepSeek V4 Pro",
     ),
     "DeepSeek V4 Pro (Peak)": (
+        "DeepSeek V4 Pro 0813 Max",
         "DeepSeek V4 Pro 0813 (max)",
         "DeepSeek V4 Pro (max)",
         "DeepSeek V4 Pro (high)",
@@ -116,18 +135,10 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
         "DeepSeek V4 Flash (high)",
         "DeepSeek V4 Flash",
     ),
-    "DeepSeek V4.1 Flash (Off-Peak)": (
-        "DeepSeek V4.1 Flash 1017 (max)",
-        "DeepSeek V4.1 Flash (max)",
-        "DeepSeek V4.1 Flash (high)",
-        "DeepSeek V4.1 Flash",
-    ),
-    "DeepSeek V4.1 Flash (Peak)": (
-        "DeepSeek V4.1 Flash 1017 (max)",
-        "DeepSeek V4.1 Flash (max)",
-        "DeepSeek V4.1 Flash (high)",
-        "DeepSeek V4.1 Flash",
-    ),
+    "DeepSeek V4.1 Flash 1017 (Off-Peak)": DEEPSEEK_V41_ALIASES,
+    "DeepSeek V4.1 Flash 1017 (Peak)": DEEPSEEK_V41_ALIASES,
+    "DeepSeek V4.1 Flash (Off-Peak)": DEEPSEEK_V41_ALIASES,
+    "DeepSeek V4.1 Flash (Peak)": DEEPSEEK_V41_ALIASES,
     "DeepSeek V4 Flash Vision Exp (Off-Peak)": (
         "DeepSeek V4 Flash Vision (max)",
         "DeepSeek V4 Flash 0731 (max)",
@@ -144,11 +155,13 @@ AA_MODEL_ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "MiniMax M3.1 Flash": ("MiniMax-M3.1-Flash",),
     "Gemini 4 Argon": (
+        "Gemini 4 Argon High",
         "Gemini 4 Argon (high)",
         "Gemini 4 Argon (medium)",
         "Gemini 4 Argon (low)",
     ),
     "Gemini 4 Argon Contributor": (
+        "Gemini 4 Argon High",
         "Gemini 4 Argon (high)",
         "Gemini 4 Argon (medium)",
         "Gemini 4 Argon (low)",
