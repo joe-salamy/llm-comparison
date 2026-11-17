@@ -486,7 +486,7 @@ def opencode_go_payload(rows: list[dict[str, str]]) -> dict[str, Any]:
         ],
         "graphCategories": graph_categories,
         "scrapedAt": scraped_at,
-        "sourceUrl": "https://opencode.ai/docs/go/",
+        "sourceUrl": "https://opencode.ai/console/go#pricing",
         "formula": "((7 × cached read + 2 × input + output) ÷ 10) ÷ monthly quota",
     }
 
